@@ -18,6 +18,25 @@ export interface BlockType {
   icon: string; // Emoji icon
 }
 
+// ─── Character / Animation ─────────────────────────────────────────────────────
+export type AnimationName = 'idle' | 'walk' | 'jump' | 'fall' | 'hurt';
+
+export interface AnimationFrame {
+  id: string;
+  pixels: string[]; // ART_SIZE * ART_SIZE colors
+}
+
+export interface CharacterAnimation {
+  name: AnimationName;
+  frames: AnimationFrame[];
+  fps: number;
+}
+
+export interface CharacterDefinition {
+  id: string;
+  animations: Record<AnimationName, CharacterAnimation>;
+}
+
 // ─── Tile Art ──────────────────────────────────────────────────────────────────
 export const ART_SIZE = 13; // 13×13 pixel art grid (Bloxels standard)
 export const ROOM_SIZE = 13; // 13×13 tiles per room
@@ -54,13 +73,14 @@ export interface Project {
   gameType: 'platformer';
   tileArts: TileArt[];
   worldMap: WorldMapLayout;
+  playerCharacter: CharacterDefinition | null;
   backgroundColor: string;
   createdAt: number;
   updatedAt: number;
 }
 
 // ─── UI State ──────────────────────────────────────────────────────────────────
-export type AppMode = 'home' | 'artboard' | 'worldmap' | 'gametest';
+export type AppMode = 'home' | 'artboard' | 'character' | 'worldmap' | 'gametest';
 
 export type DrawTool = 'pen' | 'eraser' | 'fill' | 'eyedropper';
 

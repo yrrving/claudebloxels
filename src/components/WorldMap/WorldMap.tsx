@@ -297,6 +297,19 @@ const RoomMiniPreview: React.FC<{ room: { cells: (string | null)[] }; tileArts: 
   );
 };
 
+// ── Helper: find room position in grid ────────────────────────────────────────
+function findRoomPos(
+  grid: (string | null)[][],
+  roomId: string
+): { row: number; col: number } | null {
+  for (let r = 0; r < grid.length; r++) {
+    for (let c = 0; c < (grid[r]?.length ?? 0); c++) {
+      if (grid[r][c] === roomId) return { row: r, col: c };
+    }
+  }
+  return null;
+}
+
 // ── WorldMap (main) ───────────────────────────────────────────────────────────
 type ViewMode = 'map' | 'room';
 type RoomTool = 'paint' | 'erase' | 'fill';
@@ -316,6 +329,17 @@ export const WorldMap: React.FC = () => {
   const handleOpenRoom = (roomId: string) => {
     setActiveRoom(roomId);
     setViewMode('room');
+  };
+
+  // Adjacent rooms for navigation arrows
+  const grid = project?.worldMap.grid ?? [];
+  const rooms = project?.worldMap.rooms ?? ({} as Record<string, import('../../models/types').Room>);
+  const activePos = ui.activeRoomId ? findRoomPos(grid, ui.activeRoomId) : null;
+  const adjacentRooms = {
+    up:    activePos ? (grid[activePos.row - 1]?.[activePos.col] ?? null) : null,
+    down:  activePos ? (grid[activePos.row + 1]?.[activePos.col] ?? null) : null,
+    left:  activePos ? (grid[activePos.row]?.[activePos.col - 1] ?? null) : null,
+    right: activePos ? (grid[activePos.row]?.[activePos.col + 1] ?? null) : null,
   };
 
   const effectiveTool: RoomTool = isEraseMode ? 'erase' : roomTool;
@@ -428,6 +452,42 @@ export const WorldMap: React.FC = () => {
                   Sätt som start
                 </button>
               )}
+
+              {/* Room navigation arrows */}
+              <div className={styles.roomNavBtns}>
+                <button
+                  className={styles.roomNavBtn}
+                  disabled={!adjacentRooms.up}
+                  onClick={() => adjacentRooms.up && handleOpenRoom(adjacentRooms.up)}
+                  title={adjacentRooms.up ? `Gå upp: ${rooms[adjacentRooms.up]?.name}` : 'Inget rum ovanför'}
+                >
+                  ▲
+                </button>
+                <button
+                  className={styles.roomNavBtn}
+                  disabled={!adjacentRooms.left}
+                  onClick={() => adjacentRooms.left && handleOpenRoom(adjacentRooms.left)}
+                  title={adjacentRooms.left ? `Gå vänster: ${rooms[adjacentRooms.left]?.name}` : 'Inget rum till vänster'}
+                >
+                  ◀
+                </button>
+                <button
+                  className={styles.roomNavBtn}
+                  disabled={!adjacentRooms.right}
+                  onClick={() => adjacentRooms.right && handleOpenRoom(adjacentRooms.right)}
+                  title={adjacentRooms.right ? `Gå höger: ${rooms[adjacentRooms.right]?.name}` : 'Inget rum till höger'}
+                >
+                  ▶
+                </button>
+                <button
+                  className={styles.roomNavBtn}
+                  disabled={!adjacentRooms.down}
+                  onClick={() => adjacentRooms.down && handleOpenRoom(adjacentRooms.down)}
+                  title={adjacentRooms.down ? `Gå ner: ${rooms[adjacentRooms.down]?.name}` : 'Inget rum nedanför'}
+                >
+                  ▼
+                </button>
+              </div>
             </>
           )}
 
@@ -461,11 +521,23 @@ export const WorldMap: React.FC = () => {
         ) : (
           <div className={styles.roomView}>
             {activeRoom && ui.activeRoomId ? (
-              <RoomCanvas
-                roomId={ui.activeRoomId}
-                selectedTileId={effectiveTileId}
-                tool={effectiveTool}
-              />
+              <div className={styles.roomNavGrid}>
+                <div className={styles.navUp}>
+                  <NavArrowBtn dir="up" roomId={adjacentRooms.up} roomName={adjacentRooms.up ? rooms[adjacentRooms.up]?.name : undefined} onNavigate={handleOpenRoom} />
+                </div>
+                <div className={styles.navLeft}>
+                  <NavArrowBtn dir="left" roomId={adjacentRooms.left} roomName={adjacentRooms.left ? rooms[adjacentRooms.left]?.name : undefined} onNavigate={handleOpenRoom} />
+                </div>
+                <div className={styles.navCanvas}>
+                  <RoomCanvas roomId={ui.activeRoomId} selectedTileId={effectiveTileId} tool={effectiveTool} />
+                </div>
+                <div className={styles.navRight}>
+                  <NavArrowBtn dir="right" roomId={adjacentRooms.right} roomName={adjacentRooms.right ? rooms[adjacentRooms.right]?.name : undefined} onNavigate={handleOpenRoom} />
+                </div>
+                <div className={styles.navDown}>
+                  <NavArrowBtn dir="down" roomId={adjacentRooms.down} roomName={adjacentRooms.down ? rooms[adjacentRooms.down]?.name : undefined} onNavigate={handleOpenRoom} />
+                </div>
+              </div>
             ) : (
               <div style={{ color: 'var(--text-dim)', textAlign: 'center' }}>
                 <p>Välj ett rum från kartvyn för att redigera det.</p>
@@ -475,5 +547,40 @@ export const WorldMap: React.FC = () => {
         )}
       </div>
     </div>
+  );
+};
+
+// ── Nav arrow button ───────────────────────────────────────────────────────────
+const ARROW_ICONS = { up: '▲', down: '▼', left: '◀', right: '▶' };
+const DIR_LABEL   = { up: 'upp', down: 'ner', left: 'vänster', right: 'höger' };
+
+interface NavArrowBtnProps {
+  roomId: string | null;
+  roomName: string | undefined;
+  dir: 'up' | 'down' | 'left' | 'right';
+  onNavigate: (roomId: string) => void;
+}
+
+const NavArrowBtn: React.FC<NavArrowBtnProps> = ({ roomId, roomName, dir, onNavigate }) => {
+  const isHoriz = dir === 'up' || dir === 'down';
+  const active = !!roomId;
+
+  const handleClick = () => {
+    if (roomId) onNavigate(roomId);
+  };
+
+  return (
+    <button
+      className={[
+        styles.navArrowBtn,
+        isHoriz ? styles.navArrowHoriz : styles.navArrowVert,
+        !active ? styles.navArrowEmpty : '',
+      ].join(' ')}
+      onClick={handleClick}
+      title={active ? `Gå ${DIR_LABEL[dir]}: ${roomName ?? ''}` : 'Inget rum här'}
+    >
+      <span className={styles.navArrowIcon}>{ARROW_ICONS[dir]}</span>
+      {active && <span className={styles.navArrowName}>{roomName ?? ''}</span>}
+    </button>
   );
 };

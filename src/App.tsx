@@ -5,6 +5,7 @@ import { HomeScreen } from './components/HomeScreen/HomeScreen';
 import { ArtBoard } from './components/ArtBoard/ArtBoard';
 import { WorldMap } from './components/WorldMap/WorldMap';
 import { GamePlayer } from './components/GamePlayer/GamePlayer';
+import { CharacterEditor } from './components/CharacterEditor/CharacterEditor';
 import { exportGameAsHTML } from './export/exportService';
 import styles from './App.module.css';
 
@@ -36,6 +37,7 @@ export const App: React.FC = () => {
       <main className={styles.main}>
         {ui.mode === 'home' && <HomeScreen />}
         {ui.mode === 'artboard' && <ArtBoard />}
+        {ui.mode === 'character' && <CharacterEditor />}
         {ui.mode === 'worldmap' && <WorldMap />}
         {ui.mode === 'gametest' && <GamePlayer />}
       </main>

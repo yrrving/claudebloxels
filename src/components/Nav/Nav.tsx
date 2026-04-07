@@ -4,18 +4,19 @@ import type { AppMode } from '../../models/types';
 import { exportGameAsHTML } from '../../export/exportService';
 import styles from './Nav.module.css';
 
-interface TabDef {
+interface StepDef {
   id: AppMode;
   label: string;
   icon: string;
-  requiresProject: boolean;
+  step: number;
+  tooltip: string;
 }
 
-const TABS: TabDef[] = [
-  { id: 'home', label: 'Hem', icon: '🏠', requiresProject: false },
-  { id: 'artboard', label: 'Rita', icon: '🎨', requiresProject: true },
-  { id: 'worldmap', label: 'Karta', icon: '🗺️', requiresProject: true },
-  { id: 'gametest', label: 'Spela', icon: '▶️', requiresProject: true },
+const STEPS: StepDef[] = [
+  { id: 'character', label: 'Karaktär', icon: '🧍', step: 1, tooltip: 'Rita din spelfigur med animationer' },
+  { id: 'artboard',  label: 'Brickor',  icon: '🎨', step: 2, tooltip: 'Skapa mark, fiender, föremål m.m.' },
+  { id: 'worldmap',  label: 'Bana',     icon: '🗺️', step: 3, tooltip: 'Bygg din bana av rum och brickor' },
+  { id: 'gametest',  label: 'Spela',    icon: '▶️', step: 4, tooltip: 'Testa och spela ditt spel' },
 ];
 
 export const Nav: React.FC = () => {
@@ -43,21 +44,46 @@ export const Nav: React.FC = () => {
         Claude<span>Bloxels</span>
       </div>
 
-      <div className={styles.tabs}>
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            className={[
-              styles.tab,
-              ui.mode === tab.id ? styles.active : '',
-              tab.requiresProject && !project ? styles.disabled : '',
-            ].join(' ')}
-            onClick={() => (!tab.requiresProject || project) && setMode(tab.id)}
-          >
-            <span className={styles.tabIcon}>{tab.icon}</span>
-            <span className={styles.tabLabel}>{tab.label}</span>
-          </button>
-        ))}
+      {/* Hem — standalone */}
+      <button
+        className={[styles.tab, ui.mode === 'home' ? styles.active : ''].join(' ')}
+        onClick={() => setMode('home')}
+        title="Startsida"
+      >
+        <span className={styles.tabIcon}>🏠</span>
+        <span className={styles.tabLabel}>Hem</span>
+      </button>
+
+      {/* Separator + steg */}
+      <div className={styles.stepsSeparator}>
+        <span className={styles.stepsSeparatorLine} />
+        <span className={styles.stepsSeparatorLabel}>Skapa ditt spel</span>
+        <span className={styles.stepsSeparatorLine} />
+      </div>
+
+      <div className={styles.steps}>
+        {STEPS.map((step) => {
+          const locked = !project;
+          const isActive = ui.mode === step.id;
+          return (
+            <button
+              key={step.id}
+              className={[
+                styles.stepTab,
+                isActive ? styles.stepActive : '',
+                locked ? styles.disabled : '',
+              ].join(' ')}
+              onClick={() => !locked && setMode(step.id)}
+              title={step.tooltip}
+            >
+              <span className={[styles.stepNum, isActive ? styles.stepNumActive : ''].join(' ')}>
+                {step.step}
+              </span>
+              <span className={styles.tabIcon}>{step.icon}</span>
+              <span className={styles.tabLabel}>{step.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {project && (
@@ -91,14 +117,6 @@ export const Nav: React.FC = () => {
           <button className={styles.btn} onClick={handleSave} title="Spara (Ctrl+S)">
             💾 Spara
           </button>
-          {ui.mode !== 'gametest' && (
-            <button
-              className={`${styles.btn} ${styles.btnPlay}`}
-              onClick={() => setMode('gametest')}
-            >
-              ▶ Spela
-            </button>
-          )}
         </div>
       )}
     </nav>

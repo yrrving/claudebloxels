@@ -5,6 +5,7 @@ import {
   updateGame,
   renderGame,
   buildTileCache,
+  buildCharacterCache,
   TILE_SIZE,
 } from '../../runtime/engine';
 import type { GameState, InputState } from '../../runtime/engine';
@@ -24,6 +25,7 @@ export const GamePlayer: React.FC = () => {
     jumpPressed: false,
   });
   const tileCacheRef = useRef<Record<string, HTMLCanvasElement>>({});
+  const charCacheRef = useRef<Record<string, HTMLCanvasElement>>({});
   const rafRef = useRef<number>(0);
   const [gameStatus, setGameStatus] = useState<'playing' | 'won' | 'dead'>('playing');
 
@@ -58,6 +60,7 @@ export const GamePlayer: React.FC = () => {
       project,
       ctx,
       tileCacheRef.current,
+      charCacheRef.current,
       canvas.width,
       canvas.height
     );
@@ -73,8 +76,11 @@ export const GamePlayer: React.FC = () => {
   useEffect(() => {
     if (!project) return;
 
-    // Build tile cache
+    // Build tile + character cache
     tileCacheRef.current = buildTileCache(project.tileArts, TILE_SIZE);
+    charCacheRef.current = project.playerCharacter
+      ? buildCharacterCache(project.playerCharacter, TILE_SIZE)
+      : {};
 
     // Init game
     gameStateRef.current = initGameState(project);

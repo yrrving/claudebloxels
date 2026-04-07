@@ -173,12 +173,12 @@ function resolveSolids(entity, solidCells) {
     if (!overlaps(entity, { x:c.x, y:c.y, w:TILE_SIZE, h:TILE_SIZE })) continue;
     const dy = (entity.y + entity.h/2) - (c.y + TILE_SIZE/2);
     if (dy < 0) {
-      entity.y = c.y + TILE_SIZE;
-      entity.vy = Math.max(0, entity.vy);
-    } else {
       entity.y = c.y - entity.h;
       entity.vy = 0;
       entity.onGround = true;
+    } else {
+      entity.y = c.y + TILE_SIZE;
+      entity.vy = Math.max(0, entity.vy);
     }
   }
 }
@@ -316,26 +316,31 @@ function startGame(project, canvas) {
 
     resolveSolids(p, solidCells);
 
+    const TINV = 24;
     let newRoomId = roomId, newRoomRow = state.roomRow, newRoomCol = state.roomCol;
     if (p.x + p.w < 0) {
       const id = project.worldMap.grid[state.roomRow]?.[state.roomCol-1] ?? null;
-      if (id && project.worldMap.rooms[id]) { newRoomId=id; newRoomCol=state.roomCol-1; p.x=ROOM_PX-p.w-4; }
+      if (id && project.worldMap.rooms[id]) { newRoomId=id; newRoomCol=state.roomCol-1; p.x=ROOM_PX-p.w-2; p.invTimer=Math.max(p.invTimer,TINV); }
       else { p.x=0; p.vx=0; }
     } else if (p.x > ROOM_PX) {
       const id = project.worldMap.grid[state.roomRow]?.[state.roomCol+1] ?? null;
-      if (id && project.worldMap.rooms[id]) { newRoomId=id; newRoomCol=state.roomCol+1; p.x=4; }
+      if (id && project.worldMap.rooms[id]) { newRoomId=id; newRoomCol=state.roomCol+1; p.x=2; p.invTimer=Math.max(p.invTimer,TINV); }
       else { p.x=ROOM_PX-p.w; p.vx=0; }
     } else if (p.y + p.h < 0) {
       const id = project.worldMap.grid[state.roomRow-1]?.[state.roomCol] ?? null;
-      if (id && project.worldMap.rooms[id]) { newRoomId=id; newRoomRow=state.roomRow-1; p.y=ROOM_PX-p.h-4; }
+      if (id && project.worldMap.rooms[id]) { newRoomId=id; newRoomRow=state.roomRow-1; p.y=ROOM_PX-p.h-2; p.invTimer=Math.max(p.invTimer,TINV); }
       else { p.y=0; p.vy=0; }
     } else if (p.y > ROOM_PX) {
-      p.health = Math.max(0, p.health-1);
-      if (p.health <= 0) { state = {...state, player:{...p}, status:'dead', statusTimer:0}; return; }
-      const st = getCells(project, roomId, 'story');
-      if (st.length>0) { p.x=st[0].x+TILE_SIZE/2-PW/2; p.y=st[0].y-PH; }
-      else { p.x=TILE_SIZE; p.y=TILE_SIZE; }
-      p.vy=0; p.vx=0; p.invTimer=INV_FRAMES;
+      const id = project.worldMap.grid[state.roomRow+1]?.[state.roomCol] ?? null;
+      if (id && project.worldMap.rooms[id]) { newRoomId=id; newRoomRow=state.roomRow+1; p.y=2; p.invTimer=Math.max(p.invTimer,TINV); }
+      else {
+        p.health = Math.max(0, p.health-1);
+        if (p.health <= 0) { state = {...state, player:{...p}, status:'dead', statusTimer:0}; return; }
+        const st = getCells(project, roomId, 'story');
+        if (st.length>0) { p.x=st[0].x+TILE_SIZE/2-PW/2; p.y=st[0].y-PH; }
+        else { p.x=TILE_SIZE; p.y=TILE_SIZE; }
+        p.vy=0; p.vx=0; p.invTimer=INV_FRAMES;
+      }
     }
 
     if (p.invTimer <= 0) {

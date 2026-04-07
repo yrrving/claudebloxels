@@ -23,12 +23,7 @@
   color: var(--accent);
 }
 
-.tabs {
-  display: flex;
-  gap: 2px;
-  flex: 1;
-}
-
+/* ── Hem-tab (fristående) ── */
 .tab {
   display: flex;
   align-items: center;
@@ -40,6 +35,7 @@
   color: var(--text-secondary);
   transition: all 0.15s;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .tab:hover {
@@ -52,9 +48,85 @@
   color: var(--text-primary);
 }
 
-.tab.disabled {
-  opacity: 0.35;
+/* ── Separator ── */
+.stepsSeparator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 8px;
+  flex-shrink: 0;
+}
+
+.stepsSeparatorLine {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+}
+
+.stepsSeparatorLabel {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+/* ── Steg-tabs ── */
+.steps {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+}
+
+.stepTab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+  white-space: nowrap;
+  position: relative;
+}
+
+.stepTab:hover:not(.disabled) {
+  background: var(--bg-mid);
+  color: var(--text-primary);
+}
+
+.stepActive {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.disabled {
+  opacity: 0.3;
   pointer-events: none;
+}
+
+/* Stegnummer-badge */
+.stepNum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 800;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.stepNumActive {
+  background: var(--accent);
+  color: #fff;
 }
 
 .tabIcon {
@@ -65,12 +137,22 @@
   display: block;
 }
 
+@media (max-width: 860px) {
+  .stepsSeparatorLabel {
+    display: none;
+  }
+}
+
 @media (max-width: 700px) {
   .tabLabel {
     display: none;
   }
-  .tab {
+  .tab,
+  .stepTab {
     padding: 8px 10px;
+  }
+  .stepsSeparator {
+    margin: 0 4px;
   }
 }
 

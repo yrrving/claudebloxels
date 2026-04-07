@@ -1,4 +1,4 @@
-import type { Project, TileArt, BlockTypeBehavior } from '../models/types';
+import type { Project, TileArt, BlockTypeBehavior, CharacterDefinition, AnimationName, PlayerState } from '../models/types';
 import { ART_SIZE, ROOM_SIZE } from '../models/types';
 import { BLOCK_TYPE_MAP } from '../data/blockTypes';
 
@@ -135,15 +135,15 @@ function resolveSolids(
   for (const c of solidCells) {
     if (!overlaps(entity, { x: c.x, y: c.y, w: TILE_SIZE, h: TILE_SIZE })) continue;
     const dy = (entity.y + entity.h / 2) - (c.y + TILE_SIZE / 2);
+    // dy < 0  →  entity center is ABOVE tile center  →  entity lands on top
+    // dy >= 0 →  entity center is BELOW tile center  →  entity hit a ceiling
     if (dy < 0) {
-      // Hit ceiling from below
-      entity.y = c.y + TILE_SIZE;
-      entity.vy = Math.max(0, entity.vy);
-    } else {
-      // Land on top
       entity.y = c.y - entity.h;
       entity.vy = 0;
       entity.onGround = true;
+    } else {
+      entity.y = c.y + TILE_SIZE;
+      entity.vy = Math.max(0, entity.vy);
     }
   }
 }
@@ -323,57 +323,67 @@ export function updateGame(
   let newRoomRow = state.roomRow;
   let newRoomCol = state.roomCol;
 
+  const TRANSITION_INV = 24; // brief invulnerability frames when entering a new room
+
   if (p.x + p.w < 0) {
-    const leftCol = state.roomCol - 1;
-    const leftId = project.worldMap.grid[state.roomRow]?.[leftCol] ?? null;
+    const leftId = project.worldMap.grid[state.roomRow]?.[state.roomCol - 1] ?? null;
     if (leftId && project.worldMap.rooms[leftId]) {
       newRoomId = leftId;
-      newRoomCol = leftCol;
-      p.x = ROOM_PX - p.w - 4;
+      newRoomCol = state.roomCol - 1;
+      p.x = ROOM_PX - p.w - 2;
+      p.invTimer = Math.max(p.invTimer, TRANSITION_INV);
     } else {
       p.x = 0;
       p.vx = 0;
     }
   } else if (p.x > ROOM_PX) {
-    const rightCol = state.roomCol + 1;
-    const rightId = project.worldMap.grid[state.roomRow]?.[rightCol] ?? null;
+    const rightId = project.worldMap.grid[state.roomRow]?.[state.roomCol + 1] ?? null;
     if (rightId && project.worldMap.rooms[rightId]) {
       newRoomId = rightId;
-      newRoomCol = rightCol;
-      p.x = 4;
+      newRoomCol = state.roomCol + 1;
+      p.x = 2;
+      p.invTimer = Math.max(p.invTimer, TRANSITION_INV);
     } else {
       p.x = ROOM_PX - p.w;
       p.vx = 0;
     }
   } else if (p.y + p.h < 0) {
-    const upRow = state.roomRow - 1;
-    const upId = project.worldMap.grid[upRow]?.[state.roomCol] ?? null;
+    const upId = project.worldMap.grid[state.roomRow - 1]?.[state.roomCol] ?? null;
     if (upId && project.worldMap.rooms[upId]) {
       newRoomId = upId;
-      newRoomRow = upRow;
-      p.y = ROOM_PX - p.h - 4;
+      newRoomRow = state.roomRow - 1;
+      p.y = ROOM_PX - p.h - 2;
+      p.invTimer = Math.max(p.invTimer, TRANSITION_INV);
     } else {
       p.y = 0;
       p.vy = 0;
     }
   } else if (p.y > ROOM_PX) {
-    // Fell out of bottom
-    p.health = Math.max(0, p.health - 1);
-    if (p.health <= 0) {
-      return { ...state, player: { ...p, dead: true }, status: 'dead', statusTimer: 0, flashAlpha: 1, flashColor: '#000' };
-    }
-    // Respawn at start of room
-    const storyTiles = getCellsWithBehavior(project, roomId, 'story');
-    if (storyTiles.length > 0) {
-      p.x = storyTiles[0].x + TILE_SIZE / 2 - PLAYER_W / 2;
-      p.y = storyTiles[0].y - PLAYER_H;
+    // Check for a room directly below before dealing damage
+    const downId = project.worldMap.grid[state.roomRow + 1]?.[state.roomCol] ?? null;
+    if (downId && project.worldMap.rooms[downId]) {
+      newRoomId = downId;
+      newRoomRow = state.roomRow + 1;
+      p.y = 2;
+      p.invTimer = Math.max(p.invTimer, TRANSITION_INV);
     } else {
-      p.x = TILE_SIZE;
-      p.y = TILE_SIZE;
+      // Truly fell into the void — lose a life
+      p.health = Math.max(0, p.health - 1);
+      if (p.health <= 0) {
+        return { ...state, player: { ...p, dead: true }, status: 'dead', statusTimer: 0, flashAlpha: 1, flashColor: '#000' };
+      }
+      const storyTiles = getCellsWithBehavior(project, roomId, 'story');
+      if (storyTiles.length > 0) {
+        p.x = storyTiles[0].x + TILE_SIZE / 2 - PLAYER_W / 2;
+        p.y = storyTiles[0].y - PLAYER_H;
+      } else {
+        p.x = TILE_SIZE;
+        p.y = TILE_SIZE;
+      }
+      p.vy = 0;
+      p.vx = 0;
+      p.invTimer = INV_FRAMES;
     }
-    p.vy = 0;
-    p.vx = 0;
-    p.invTimer = INV_FRAMES;
   }
 
   // ── Special tile overlaps ──
@@ -552,11 +562,57 @@ export function buildTileCache(
   return cache;
 }
 
+// Pre-render all character animation frames — key: `${animName}_${frameIndex}`
+export function buildCharacterCache(
+  character: CharacterDefinition,
+  size: number
+): Record<string, HTMLCanvasElement> {
+  const cache: Record<string, HTMLCanvasElement> = {};
+  for (const [animName, anim] of Object.entries(character.animations)) {
+    anim.frames.forEach((frame, i) => {
+      const c = document.createElement('canvas');
+      c.width = size;
+      c.height = size;
+      const ctx = c.getContext('2d')!;
+      const px = size / ART_SIZE;
+      // No background — transparent so game bg shows through
+      for (let fi = 0; fi < frame.pixels.length; fi++) {
+        const col = frame.pixels[fi];
+        if (!col) continue;
+        ctx.fillStyle = col;
+        ctx.fillRect((fi % ART_SIZE) * px, Math.floor(fi / ART_SIZE) * px, px, px);
+      }
+      cache[`${animName}_${i}`] = c;
+    });
+  }
+  return cache;
+}
+
+function getCharFrame(
+  player: PlayerState,
+  character: CharacterDefinition,
+  charCache: Record<string, HTMLCanvasElement>,
+  time: number
+): HTMLCanvasElement | null {
+  let animName: AnimationName;
+  if (player.invTimer > INV_FRAMES / 2) animName = 'hurt';
+  else if (!player.onGround && player.vy < 0) animName = 'jump';
+  else if (!player.onGround && player.vy > 1) animName = 'fall';
+  else if (Math.abs(player.vx) > 0.3) animName = 'walk';
+  else animName = 'idle';
+
+  const anim = character.animations[animName];
+  if (!anim || anim.frames.length === 0) return null;
+  const frameIndex = Math.floor(time / Math.max(1, Math.round(60 / anim.fps))) % anim.frames.length;
+  return charCache[`${animName}_${frameIndex}`] ?? null;
+}
+
 export function renderGame(
   state: GameState,
   project: Project,
   ctx: CanvasRenderingContext2D,
   tileCache: Record<string, HTMLCanvasElement>,
+  charCache: Record<string, HTMLCanvasElement>,
   viewW: number,
   viewH: number
 ) {
@@ -633,22 +689,36 @@ export function renderGame(
     }
   }
 
-  // Draw player
+  // Draw player (custom character art or fallback rectangle)
   const pFlash = p.invTimer > 0 && Math.floor(p.invTimer / 4) % 2 === 0;
   if (!pFlash) {
-    // Body
-    ctx.fillStyle = p.inLiquid ? '#60a5fa' : '#4f46e5';
-    ctx.fillRect(p.x, p.y, p.w, p.h);
-    // Eyes
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(p.x + p.w * 0.6, p.y + p.h * 0.18, 9, 9);
-    ctx.fillRect(p.x + p.w * 0.1, p.y + p.h * 0.18, 9, 9);
-    ctx.fillStyle = '#1e1b4b';
-    ctx.fillRect(p.x + p.w * 0.6 + 2, p.y + p.h * 0.18 + 2, 5, 5);
-    ctx.fillRect(p.x + p.w * 0.1 + 2, p.y + p.h * 0.18 + 2, 5, 5);
-    // Smile
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(p.x + p.w * 0.2, p.y + p.h * 0.55, p.w * 0.6, 3);
+    const charFrame = project.playerCharacter
+      ? getCharFrame(p, project.playerCharacter, charCache, state.time)
+      : null;
+    if (charFrame) {
+      ctx.save();
+      if (p.vx < -0.1) {
+        // Flip horizontally when moving left
+        ctx.translate(p.x + p.w, p.y);
+        ctx.scale(-1, 1);
+        ctx.drawImage(charFrame, 0, 0, p.w, p.h);
+      } else {
+        ctx.drawImage(charFrame, p.x, p.y, p.w, p.h);
+      }
+      ctx.restore();
+    } else {
+      // Fallback blue rectangle with face
+      ctx.fillStyle = p.inLiquid ? '#60a5fa' : '#4f46e5';
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(p.x + p.w * 0.6, p.y + p.h * 0.18, 9, 9);
+      ctx.fillRect(p.x + p.w * 0.1, p.y + p.h * 0.18, 9, 9);
+      ctx.fillStyle = '#1e1b4b';
+      ctx.fillRect(p.x + p.w * 0.6 + 2, p.y + p.h * 0.18 + 2, 5, 5);
+      ctx.fillRect(p.x + p.w * 0.1 + 2, p.y + p.h * 0.18 + 2, 5, 5);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(p.x + p.w * 0.2, p.y + p.h * 0.55, p.w * 0.6, 3);
+    }
   }
 
   ctx.restore();

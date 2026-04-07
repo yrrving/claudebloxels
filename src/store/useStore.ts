@@ -9,6 +9,10 @@ import type {
   AppMode,
   DrawTool,
   BlockTypeBehavior,
+  AnimationName,
+  CharacterDefinition,
+  CharacterAnimation,
+  AnimationFrame,
 } from '../models/types';
 import { ART_SIZE, ROOM_SIZE } from '../models/types';
 import { getDefaultArtPalette } from '../data/blockTypes';
@@ -73,6 +77,27 @@ function makeEmptyTilePixels(): string[] {
   return Array(ART_SIZE * ART_SIZE).fill('');
 }
 
+function makeEmptyFrame(): AnimationFrame {
+  return { id: uuid(), pixels: Array(ART_SIZE * ART_SIZE).fill('') };
+}
+
+function makeAnim(name: AnimationName, frameCount: number, fps: number): CharacterAnimation {
+  return { name, frames: Array.from({ length: frameCount }, makeEmptyFrame), fps };
+}
+
+export function makeDefaultCharacter(): CharacterDefinition {
+  return {
+    id: uuid(),
+    animations: {
+      idle: makeAnim('idle', 2, 4),
+      walk: makeAnim('walk', 4, 8),
+      jump: makeAnim('jump', 1, 6),
+      fall: makeAnim('fall', 1, 6),
+      hurt: makeAnim('hurt', 1, 8),
+    },
+  };
+}
+
 function makeEmptyRoomCells(): (string | null)[] {
   return Array(ROOM_SIZE * ROOM_SIZE).fill(null);
 }
@@ -104,6 +129,7 @@ function makeDefaultProject(name: string): Project {
     gameType: 'platformer',
     tileArts: [],
     worldMap,
+    playerCharacter: null,
     backgroundColor: '#1e1b4b',
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -115,8 +141,8 @@ interface Store {
   project: Project | null;
   ui: UIState;
   savedProjects: { id: string; name: string; updatedAt: number }[];
-  undoStack: TileArt[][];  // history of tileArts arrays for undo
-  redoStack: TileArt[][];
+  undoStack: { tileArts: TileArt[]; character: CharacterDefinition | null }[];
+  redoStack: { tileArts: TileArt[]; character: CharacterDefinition | null }[];
 
   // Project lifecycle
   createProject: (name: string) => void;
@@ -142,6 +168,16 @@ interface Store {
   placeCell: (roomId: string, cellIndex: number, tileArtId: string | null) => void;
   fillCells: (roomId: string, startIndex: number, fillTileArtId: string | null) => void;
   setStartRoom: (roomId: string, spawnCellIndex: number) => void;
+
+  // Character
+  initPlayerCharacter: () => void;
+  clearPlayerCharacter: () => void;
+  updateCharacterFrame: (animName: AnimationName, frameIndex: number, pixelIndex: number, color: string) => void;
+  fillCharacterFrame: (animName: AnimationName, frameIndex: number, startPixel: number, color: string) => void;
+  addAnimationFrame: (animName: AnimationName) => void;
+  deleteAnimationFrame: (animName: AnimationName, frameIndex: number) => void;
+  duplicateAnimationFrame: (animName: AnimationName, frameIndex: number) => void;
+  setAnimationFps: (animName: AnimationName, fps: number) => void;
 
   // UI
   setMode: (mode: AppMode) => void;
@@ -226,6 +262,7 @@ export const useStore = create<Store>((set, get) => ({
       const raw = localStorage.getItem(`project_${id}`);
       if (!raw) return;
       const project: Project = JSON.parse(raw);
+      project.playerCharacter = project.playerCharacter ?? null;
       set({
         project,
         undoStack: [],
@@ -468,12 +505,91 @@ export const useStore = create<Store>((set, get) => ({
     set({ ui: { ...get().ui, artPalette: palette } });
   },
 
+  // ── Character ──
+  initPlayerCharacter: () => {
+    const { project } = get();
+    if (!project || project.playerCharacter) return;
+    set({ project: { ...project, playerCharacter: makeDefaultCharacter() } });
+  },
+
+  clearPlayerCharacter: () => {
+    const { project } = get();
+    if (!project) return;
+    set({ project: { ...project, playerCharacter: null } });
+  },
+
+  updateCharacterFrame: (animName, frameIndex, pixelIndex, color) => {
+    const { project } = get();
+    if (!project?.playerCharacter) return;
+    const anim = project.playerCharacter.animations[animName];
+    const frames = anim.frames.map((f, i) =>
+      i === frameIndex
+        ? { ...f, pixels: f.pixels.map((p, pi) => (pi === pixelIndex ? color : p)) }
+        : f
+    );
+    const ch = { ...project.playerCharacter, animations: { ...project.playerCharacter.animations, [animName]: { ...anim, frames } } };
+    set({ project: { ...project, playerCharacter: ch } });
+  },
+
+  fillCharacterFrame: (animName, frameIndex, startPixel, color) => {
+    const { project } = get();
+    if (!project?.playerCharacter) return;
+    const anim = project.playerCharacter.animations[animName];
+    const frame = anim.frames[frameIndex];
+    if (!frame) return;
+    const target = frame.pixels[startPixel] ?? '';
+    const newPixels = floodFill(frame.pixels, startPixel, target, color, ART_SIZE);
+    const frames = anim.frames.map((f, i) => (i === frameIndex ? { ...f, pixels: newPixels } : f));
+    const ch = { ...project.playerCharacter, animations: { ...project.playerCharacter.animations, [animName]: { ...anim, frames } } };
+    set({ project: { ...project, playerCharacter: ch } });
+  },
+
+  addAnimationFrame: (animName) => {
+    const { project } = get();
+    if (!project?.playerCharacter) return;
+    const anim = project.playerCharacter.animations[animName];
+    if (anim.frames.length >= 8) return;
+    const frames = [...anim.frames, makeEmptyFrame()];
+    const ch = { ...project.playerCharacter, animations: { ...project.playerCharacter.animations, [animName]: { ...anim, frames } } };
+    set({ project: { ...project, playerCharacter: ch } });
+  },
+
+  deleteAnimationFrame: (animName, frameIndex) => {
+    const { project } = get();
+    if (!project?.playerCharacter) return;
+    const anim = project.playerCharacter.animations[animName];
+    if (anim.frames.length <= 1) return;
+    const frames = anim.frames.filter((_, i) => i !== frameIndex);
+    const ch = { ...project.playerCharacter, animations: { ...project.playerCharacter.animations, [animName]: { ...anim, frames } } };
+    set({ project: { ...project, playerCharacter: ch } });
+  },
+
+  duplicateAnimationFrame: (animName, frameIndex) => {
+    const { project } = get();
+    if (!project?.playerCharacter) return;
+    const anim = project.playerCharacter.animations[animName];
+    if (anim.frames.length >= 8) return;
+    const orig = anim.frames[frameIndex];
+    const copy = { ...orig, id: uuid(), pixels: [...orig.pixels] };
+    const frames = [...anim.frames.slice(0, frameIndex + 1), copy, ...anim.frames.slice(frameIndex + 1)];
+    const ch = { ...project.playerCharacter, animations: { ...project.playerCharacter.animations, [animName]: { ...anim, frames } } };
+    set({ project: { ...project, playerCharacter: ch } });
+  },
+
+  setAnimationFps: (animName, fps) => {
+    const { project } = get();
+    if (!project?.playerCharacter) return;
+    const anim = project.playerCharacter.animations[animName];
+    const ch = { ...project.playerCharacter, animations: { ...project.playerCharacter.animations, [animName]: { ...anim, fps } } };
+    set({ project: { ...project, playerCharacter: ch } });
+  },
+
   // ── Undo/Redo ──
   pushUndo: () => {
     const { project, undoStack } = get();
     if (!project) return;
     set({
-      undoStack: [...undoStack.slice(-20), project.tileArts],
+      undoStack: [...undoStack.slice(-20), { tileArts: project.tileArts, character: project.playerCharacter ?? null }],
       redoStack: [],
     });
   },
@@ -483,9 +599,9 @@ export const useStore = create<Store>((set, get) => ({
     if (!project || undoStack.length === 0) return;
     const prev = undoStack[undoStack.length - 1];
     set({
-      project: { ...project, tileArts: prev },
+      project: { ...project, tileArts: prev.tileArts, playerCharacter: prev.character },
       undoStack: undoStack.slice(0, -1),
-      redoStack: [...redoStack, project.tileArts],
+      redoStack: [...redoStack, { tileArts: project.tileArts, character: project.playerCharacter ?? null }],
     });
   },
 
@@ -494,8 +610,8 @@ export const useStore = create<Store>((set, get) => ({
     if (!project || redoStack.length === 0) return;
     const next = redoStack[redoStack.length - 1];
     set({
-      project: { ...project, tileArts: next },
-      undoStack: [...undoStack, project.tileArts],
+      project: { ...project, tileArts: next.tileArts, playerCharacter: next.character },
+      undoStack: [...undoStack, { tileArts: project.tileArts, character: project.playerCharacter ?? null }],
       redoStack: redoStack.slice(0, -1),
     });
   },
