@@ -277,6 +277,11 @@
   transition: background 0.1s, color 0.1s;
 }
 
+.thumbBtnCopy {
+  border-color: rgba(76, 163, 122, 0.35);
+  color: var(--accent);
+}
+
 .thumbBtn:hover {
   background: var(--accent);
   color: #fff;

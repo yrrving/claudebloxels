@@ -280,8 +280,9 @@ export function updateGame(
   // Horizontal input
   const accel = 0.8;
   const friction = p.onGround ? 0.7 : 0.85;
-  if (input.left) p.vx = Math.max(p.vx - accel, -MOVE_SPEED);
-  else if (input.right) p.vx = Math.min(p.vx + accel, MOVE_SPEED);
+  const ms = project.moveSpeed ?? 1.0;
+  if (input.left) p.vx = Math.max(p.vx - accel, -MOVE_SPEED * ms);
+  else if (input.right) p.vx = Math.min(p.vx + accel, MOVE_SPEED * ms);
   else p.vx *= friction;
 
   // Gravity
@@ -325,6 +326,7 @@ export function updateGame(
       newRoomId = leftId;
       newRoomCol = state.roomCol - 1;
       p.x = ROOM_PX - p.w - 2;
+      p.y = Math.min(Math.max(p.y, 0), ROOM_PX - p.h - 1);
       p.invTimer = Math.max(p.invTimer, TRANSITION_INV);
     } else {
       p.x = 0;
@@ -336,6 +338,7 @@ export function updateGame(
       newRoomId = rightId;
       newRoomCol = state.roomCol + 1;
       p.x = 2;
+      p.y = Math.min(Math.max(p.y, 0), ROOM_PX - p.h - 1);
       p.invTimer = Math.max(p.invTimer, TRANSITION_INV);
     } else {
       p.x = ROOM_PX - p.w;
@@ -347,6 +350,7 @@ export function updateGame(
       newRoomId = upId;
       newRoomRow = state.roomRow - 1;
       p.y = ROOM_PX - p.h - 2;
+      p.x = Math.min(Math.max(p.x, 0), ROOM_PX - p.w - 1);
       p.invTimer = Math.max(p.invTimer, TRANSITION_INV);
     } else {
       p.y = 0;
@@ -359,6 +363,7 @@ export function updateGame(
       newRoomId = downId;
       newRoomRow = state.roomRow + 1;
       p.y = 2;
+      p.x = Math.min(Math.max(p.x, 0), ROOM_PX - p.w - 1);
       p.invTimer = Math.max(p.invTimer, TRANSITION_INV);
     } else {
       // Truly fell into the void — lose a life

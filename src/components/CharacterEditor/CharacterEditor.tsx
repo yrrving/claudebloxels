@@ -446,7 +446,7 @@ const FrameThumb: React.FC<FrameThumbProps> = ({
       <div className={styles.thumbActions}>
         <button className={styles.thumbBtn} onClick={onDuplicate} title="Duplicera inom denna animation">⧉</button>
         <div className={styles.copyMenuWrap}>
-          <button className={styles.thumbBtn} onClick={onToggleCopyMenu} title="Kopiera ram till annan animation">⇒</button>
+          <button className={`${styles.thumbBtn} ${styles.thumbBtnCopy}`} onClick={onToggleCopyMenu} title="Kopiera ram till annan animation">⇒</button>
           {showCopyMenu && (
             <div className={styles.copyMenu}>
               <span className={styles.copyMenuLabel}>Kopiera till:</span>

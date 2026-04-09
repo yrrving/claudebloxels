@@ -75,6 +75,7 @@ export interface Project {
   worldMap: WorldMapLayout;
   playerCharacter: CharacterDefinition | null;
   backgroundColor: string;
+  moveSpeed: number; // Multiplier: 0.6 = slow, 1.0 = normal, 1.5 = fast
   createdAt: number;
   updatedAt: number;
 }

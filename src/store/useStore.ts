@@ -131,6 +131,7 @@ function makeDefaultProject(name: string): Project {
     worldMap,
     playerCharacter: null,
     backgroundColor: '#1e1b4b',
+    moveSpeed: 1.0,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -181,6 +182,8 @@ interface Store {
   flipCharacterFrame: (animName: AnimationName, frameIndex: number) => void;
   copyFrameToAnimation: (fromAnim: AnimationName, frameIndex: number, toAnim: AnimationName) => void;
   setAnimationFps: (animName: AnimationName, fps: number) => void;
+
+  setMoveSpeed: (speed: number) => void;
 
   // UI
   setMode: (mode: AppMode) => void;
@@ -505,6 +508,12 @@ export const useStore = create<Store>((set, get) => ({
         worldMap: { ...project.worldMap, spawnCellIndex: cellIndex },
       },
     });
+  },
+
+  setMoveSpeed: (speed) => {
+    const { project } = get();
+    if (!project) return;
+    set({ project: { ...project, moveSpeed: speed } });
   },
 
   // ── UI ──

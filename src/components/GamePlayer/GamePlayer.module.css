@@ -74,20 +74,27 @@
 .jumpBtn {
   width: 70px;
   height: 70px;
-  background: rgba(99, 102, 241, 0.2);
-  border-color: rgba(99, 102, 241, 0.5);
+  background: rgba(76, 163, 122, 0.2);
+  border-color: rgba(76, 163, 122, 0.5);
   font-size: 1.5rem;
 }
 
 .jumpBtn:active,
 .jumpBtn.pressed {
-  background: rgba(99, 102, 241, 0.4);
+  background: rgba(76, 163, 122, 0.4);
 }
 
-.restartBtn {
+.toolbar {
   position: absolute;
   top: 12px;
   right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 10;
+}
+
+.restartBtn {
   padding: 6px 14px;
   background: rgba(0,0,0,0.4);
   border: 1px solid rgba(255,255,255,0.15);
@@ -96,11 +103,51 @@
   font-size: 0.82rem;
   font-weight: 600;
   transition: all 0.15s;
-  z-index: 10;
 }
 
 .restartBtn:hover {
   background: rgba(0,0,0,0.6);
+  color: #fff;
+}
+
+.speedBtns {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  padding: 4px 8px;
+}
+
+.speedLabel {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.4);
+  margin-right: 2px;
+}
+
+.speedBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: rgba(255,255,255,0.5);
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s;
+}
+
+.speedBtn:hover {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+
+.speedActive {
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 

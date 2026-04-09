@@ -197,8 +197,9 @@ function startGame(project,canvas){
     const solids=[...gCells(project,rid,'terrain'),...gCells(project,rid,'action')];
     p.inLiquid=gCells(project,rid,'liquid').some(c=>ovlp(p,{x:c.x,y:c.y,w:TS,h:TS}));
     const ac=.8,fr=p.onGround?.7:.85;
-    if(inp.left)p.vx=Math.max(p.vx-ac,-MS);
-    else if(inp.right)p.vx=Math.min(p.vx+ac,MS);
+    const spd=MS*(project.moveSpeed??1);
+    if(inp.left)p.vx=Math.max(p.vx-ac,-spd);
+    else if(inp.right)p.vx=Math.min(p.vx+ac,spd);
     else p.vx*=fr;
     if(p.inLiquid){p.vy+=LG;p.vy=Math.min(p.vy,LMF);}else{p.vy+=GR;p.vy=Math.min(p.vy,MF);}
     if(p.onGround)p.coyoteTimer=COY;else if(p.coyoteTimer>0)p.coyoteTimer--;
@@ -209,13 +210,13 @@ function startGame(project,canvas){
     let nr=rid,nrr=state.roomRow,nrc=state.roomCol;
     const g=project.worldMap.grid,TI=24;
     if(p.x+p.w<0){const id=g[state.roomRow]?.[state.roomCol-1]??null;
-      if(id&&project.worldMap.rooms[id]){nr=id;nrc=state.roomCol-1;p.x=RP-p.w-2;p.invTimer=Math.max(p.invTimer,TI);}else{p.x=0;p.vx=0;}}
+      if(id&&project.worldMap.rooms[id]){nr=id;nrc=state.roomCol-1;p.x=RP-p.w-2;p.y=Math.min(Math.max(p.y,0),RP-p.h-1);p.invTimer=Math.max(p.invTimer,TI);}else{p.x=0;p.vx=0;}}
     else if(p.x>RP){const id=g[state.roomRow]?.[state.roomCol+1]??null;
-      if(id&&project.worldMap.rooms[id]){nr=id;nrc=state.roomCol+1;p.x=2;p.invTimer=Math.max(p.invTimer,TI);}else{p.x=RP-p.w;p.vx=0;}}
+      if(id&&project.worldMap.rooms[id]){nr=id;nrc=state.roomCol+1;p.x=2;p.y=Math.min(Math.max(p.y,0),RP-p.h-1);p.invTimer=Math.max(p.invTimer,TI);}else{p.x=RP-p.w;p.vx=0;}}
     else if(p.y+p.h<0){const id=g[state.roomRow-1]?.[state.roomCol]??null;
-      if(id&&project.worldMap.rooms[id]){nr=id;nrr=state.roomRow-1;p.y=RP-p.h-2;p.invTimer=Math.max(p.invTimer,TI);}else{p.y=0;p.vy=0;}}
+      if(id&&project.worldMap.rooms[id]){nr=id;nrr=state.roomRow-1;p.y=RP-p.h-2;p.x=Math.min(Math.max(p.x,0),RP-p.w-1);p.invTimer=Math.max(p.invTimer,TI);}else{p.y=0;p.vy=0;}}
     else if(p.y>RP){const id=g[state.roomRow+1]?.[state.roomCol]??null;
-      if(id&&project.worldMap.rooms[id]){nr=id;nrr=state.roomRow+1;p.y=2;p.invTimer=Math.max(p.invTimer,TI);}
+      if(id&&project.worldMap.rooms[id]){nr=id;nrr=state.roomRow+1;p.y=2;p.x=Math.min(Math.max(p.x,0),RP-p.w-1);p.invTimer=Math.max(p.invTimer,TI);}
       else{p.health=Math.max(0,p.health-1);
         if(p.health<=0){state={...state,player:{...p},status:'dead',statusTimer:0,flashAlpha:1,flashColor:'#000'};return;}
         const ri=project.worldMap.spawnCellIndex??0;

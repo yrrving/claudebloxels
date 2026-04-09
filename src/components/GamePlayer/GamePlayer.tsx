@@ -15,7 +15,7 @@ import styles from './GamePlayer.module.css';
 const ROOM_PX = ROOM_SIZE * TILE_SIZE; // 624
 
 export const GamePlayer: React.FC = () => {
-  const { project } = useStore();
+  const { project, setMoveSpeed } = useStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameStateRef = useRef<GameState | null>(null);
   const inputRef = useRef<InputState>({
@@ -158,9 +158,23 @@ export const GamePlayer: React.FC = () => {
 
   return (
     <div className={styles.container}>
-      <button className={styles.restartBtn} onClick={restart} title="Starta om (R)">
-        🔄 Starta om
-      </button>
+      <div className={styles.toolbar}>
+        <button className={styles.restartBtn} onClick={restart} title="Starta om (R)">
+          🔄 Starta om
+        </button>
+        <div className={styles.speedBtns}>
+          <span className={styles.speedLabel}>Hastighet:</span>
+          {([0.6, 1.0, 1.5] as const).map((s) => (
+            <button
+              key={s}
+              className={`${styles.speedBtn} ${(project.moveSpeed ?? 1.0) === s ? styles.speedActive : ''}`}
+              onClick={() => setMoveSpeed(s)}
+            >
+              {s === 0.6 ? '🐢' : s === 1.0 ? '▶' : '⚡'}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <canvas
         ref={canvasRef}
