@@ -597,9 +597,10 @@ function getCharFrame(
   else if (Math.abs(player.vx) > 0.3) animName = 'walk';
   else animName = 'idle';
 
+  const hasContent = (a: CharacterDefinition['animations'][AnimationName]) => a.frames.some(f => f.pixels.some((p: string) => p !== ''));
   let anim = character.animations[animName];
-  // Fallback to idle if selected animation has no frames
-  if (!anim || anim.frames.length === 0) {
+  // Fallback to idle if selected animation has no painted pixels
+  if (!anim || !hasContent(anim)) {
     animName = 'idle';
     anim = character.animations['idle'];
   }

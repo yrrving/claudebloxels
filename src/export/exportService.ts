@@ -293,8 +293,9 @@ function startGame(project,canvas){
         else if(!p.onGround&&p.vy>1)an='fall';
         else if(Math.abs(p.vx)>.3)an='walk';
         else an='idle';
+        const hasPx=a=>a&&a.frames.some(f=>f.pixels.some(p=>p!==''));
         let anim=ch.animations[an];
-        if(!anim||anim.frames.length===0){an='idle';anim=ch.animations['idle'];}
+        if(!hasPx(anim)){an='idle';anim=ch.animations['idle'];}
         if(anim&&anim.frames.length>0){
           const fi=Math.floor(state.time/Math.max(1,Math.round(60/anim.fps)))%anim.frames.length;
           cf=cc[an+'_'+fi]??null;
