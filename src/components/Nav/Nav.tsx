@@ -1,5 +1,5 @@
 import React from 'react';
-import { useStore } from '../../store/useStore';
+import { useStore, goHomeWithSavePrompt } from '../../store/useStore';
 import type { AppMode } from '../../models/types';
 import { exportGameAsHTML } from '../../export/exportService';
 import styles from './Nav.module.css';
@@ -19,8 +19,16 @@ const STEPS: StepDef[] = [
   { id: 'gametest',  label: 'Spela',    icon: '▶️', step: 4, tooltip: 'Testa och spela ditt spel' },
 ];
 
+// Maps each "return-to-game*" hint to the onboarding stage it completes —
+// see models/types.ts UIState.onboardingStage for what each number unlocks.
+const RETURN_HINT_STAGE: Record<string, 0 | 1 | 2 | 3> = {
+  'return-to-game': 1,
+  'return-to-game-2': 2,
+  'return-to-game-3': 3,
+};
+
 export const Nav: React.FC = () => {
-  const { project, ui, setMode, saveCurrentProject, undo, redo, undoStack, redoStack } = useStore();
+  const { project, ui, setMode, setOnboardingHint, setOnboardingStage, setSuperFlow, saveCurrentProject, undo, redo, undoStack, redoStack } = useStore();
 
   const handleSave = () => {
     saveCurrentProject();
@@ -47,7 +55,7 @@ export const Nav: React.FC = () => {
       {/* Hem — standalone */}
       <button
         className={[styles.tab, ui.mode === 'home' ? styles.active : ''].join(' ')}
-        onClick={() => setMode('home')}
+        onClick={goHomeWithSavePrompt}
         title="Startsida"
       >
         <span className={styles.tabIcon}>🏠</span>
@@ -65,6 +73,14 @@ export const Nav: React.FC = () => {
         {STEPS.map((step) => {
           const locked = !project;
           const isActive = ui.mode === step.id;
+          // Final step of each guided "prova ändra något" mini-chapter (see
+          // CharacterEditor / ArtBoard / WorldMap): once the besökare has
+          // made their change, point at the real "Spela" tab instead of a
+          // separate, temporary button — same tab they'll use every time
+          // afterwards to test anything they change.
+          const completedStage = RETURN_HINT_STAGE[ui.onboardingHint ?? ''];
+          const superDone = ui.superFlow?.step === 'done';
+          const isPointerTarget = step.id === 'gametest' && (completedStage !== undefined || superDone);
           return (
             <button
               key={step.id}
@@ -72,10 +88,25 @@ export const Nav: React.FC = () => {
                 styles.stepTab,
                 isActive ? styles.stepActive : '',
                 locked ? styles.disabled : '',
+                isPointerTarget ? styles.stepTabHighlight : '',
               ].join(' ')}
-              onClick={() => !locked && setMode(step.id)}
+              onClick={() => {
+                if (locked) return;
+                setMode(step.id);
+                if (completedStage !== undefined) {
+                  setOnboardingHint(null);
+                  setOnboardingStage(completedStage);
+                }
+                if (superDone) setSuperFlow(null);
+              }}
               title={step.tooltip}
             >
+              {isPointerTarget && (
+                <div className={styles.stepPointerArrow}>
+                  <span>Testa här!</span>
+                  <span className={styles.stepPointerArrowIcon}>⬆️</span>
+                </div>
+              )}
               <span className={[styles.stepNum, isActive ? styles.stepNumActive : ''].join(' ')}>
                 {step.step}
               </span>

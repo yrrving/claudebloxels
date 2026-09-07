@@ -44,6 +44,7 @@ interface RoomCanvasProps {
   tool: 'paint' | 'erase' | 'fill' | 'spawn';
   spawnCellIndex?: number | null;
   onSpawn?: (cellIndex: number) => void;
+  onOnboardingPlaceTile?: () => void;
 }
 
 const RoomCanvas: React.FC<RoomCanvasProps> = ({
@@ -52,8 +53,9 @@ const RoomCanvas: React.FC<RoomCanvasProps> = ({
   tool,
   spawnCellIndex,
   onSpawn,
+  onOnboardingPlaceTile,
 }) => {
-  const { project, placeCell, fillCells } = useStore();
+  const { project, ui, placeCell, fillCells, setOnboardingHint } = useStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawing = useRef(false);
   const lastIdx = useRef(-1);
@@ -148,8 +150,16 @@ const RoomCanvas: React.FC<RoomCanvasProps> = ({
       lastIdx.current = cellIdx;
       const tileId = tool === 'erase' ? null : selectedTileId;
       placeCell(roomId, cellIdx, tileId);
+      if (ui.onboardingHint === 'place-tile') {
+        setOnboardingHint('return-to-game-3');
+        // The room view up to now was only a *derived* override (see
+        // WorldMap's effectiveViewMode) — commit it to real state here so
+        // the view doesn't snap back to the map overview the instant the
+        // hint changes away from 'place-tile'.
+        onOnboardingPlaceTile?.();
+      }
     },
-    [tool, selectedTileId, roomId, placeCell]
+    [tool, selectedTileId, roomId, placeCell, ui.onboardingHint, setOnboardingHint, onOnboardingPlaceTile]
   );
 
   const onMouseDown = (e: React.MouseEvent) => {
@@ -348,7 +358,7 @@ type ViewMode = 'map' | 'room';
 type RoomTool = 'paint' | 'erase' | 'fill' | 'spawn';
 
 export const WorldMap: React.FC = () => {
-  const { project, ui, setActiveRoom, setSelectedTileArt, setStartRoom, setSpawnCell } = useStore();
+  const { project, ui, setActiveRoom, setSelectedTileArt, setStartRoom, setSpawnCell, setOnboardingHint, setSuperFlow, setSelectedBlockType, setMode } = useStore();
   const [viewMode, setViewMode] = useState<ViewMode>('map');
   const [roomTool, setRoomTool] = useState<RoomTool>('paint');
   const [isEraseMode, setIsEraseMode] = useState(false);
@@ -358,6 +368,45 @@ export const WorldMap: React.FC = () => {
     ? project?.worldMap.rooms[ui.activeRoomId] ?? null
     : null;
   const isStartRoom = ui.activeRoomId === project?.worldMap.startRoomId;
+
+  const superStep = ui.superFlow?.step;
+  const superInRoomStep = superStep === 'floor-place' || superStep === 'place';
+
+  // Chapter 3 of the guided "prova ändra något" flow (see GamePlayer), and
+  // Super handlett läge's floor/mynt/fiende placement steps: derive room
+  // view instead of the room-grid overview (which they've never seen and
+  // shouldn't need to interpret yet), rather than forcing it via setState.
+  const effectiveViewMode: ViewMode =
+    (ui.onboardingHint === 'place-tile' || superInRoomStep) && activeRoom ? 'room' : viewMode;
+
+  const superOther = ui.superFlow?.remaining[0] ?? null;
+  const superOtherLabel = superOther === 'collectible' ? 'mynt' : 'en fiende';
+
+  const superAdvancePlace = () => {
+    // Commit the derived room view to real state — otherwise the moment the
+    // step changes away from 'floor-place'/'place', effectiveViewMode's
+    // override stops applying and the view would snap back to the map
+    // overview (same class of bug fixed for the lighter Handlett läge).
+    setViewMode('room');
+    const flow = ui.superFlow!;
+    if (flow.step === 'floor-place') {
+      setSuperFlow({ step: 'choice', drawing: null, remaining: flow.remaining });
+      return;
+    }
+    // step === 'place'
+    if (flow.remaining.length > 0) {
+      setSuperFlow({ step: 'ask-other', drawing: null, remaining: flow.remaining });
+    } else {
+      setSuperFlow({ step: 'done', drawing: null, remaining: [] });
+    }
+  };
+
+  const superChoose = (type: 'collectible' | 'enemy') => {
+    const flow = ui.superFlow!;
+    setSelectedBlockType(type);
+    setSuperFlow({ step: 'draw', drawing: type, remaining: flow.remaining.filter((r) => r !== type) });
+    setMode('artboard');
+  };
 
   const handleOpenRoom = (roomId: string) => {
     setActiveRoom(roomId);
@@ -386,6 +435,92 @@ export const WorldMap: React.FC = () => {
   };
 
   return (
+    <div className={styles.editorWrapper}>
+      {ui.onboardingHint === 'place-tile' && (
+        <div className={styles.onboardingBanner}>
+          <span>Steg 1 av 1 — Klicka på en tom ruta för att lägga en stjärna</span>
+          <button
+            className={styles.onboardingClose}
+            onClick={() => setOnboardingHint(null)}
+            aria-label="Stäng"
+            title="Stäng"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      {ui.onboardingHint === 'return-to-game-3' && (
+        <div className={`${styles.onboardingBanner} ${styles.onboardingBannerDone}`}>
+          <span>Klart — testa din nya bana</span>
+          <button
+            className={styles.onboardingClose}
+            onClick={() => setOnboardingHint(null)}
+            aria-label="Stäng"
+            title="Stäng"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* ── Super handlett läge ── */}
+      {superStep === 'floor-place' && (
+        <div className={styles.onboardingBanner}>
+          <span>Placera golvet på banan — klicka "Klar" när du är nöjd!</span>
+          <button className={styles.superContinueBtn} onClick={superAdvancePlace}>
+            ✅ Klar, gå vidare →
+          </button>
+        </div>
+      )}
+      {superStep === 'place' && (
+        <div className={styles.onboardingBanner}>
+          <span>
+            Placera {ui.superFlow?.drawing === 'collectible' ? 'ditt mynt' : 'din fiende'} på banan
+            — klicka "Klar" när du är nöjd!
+          </span>
+          <button className={styles.superContinueBtn} onClick={superAdvancePlace}>
+            ✅ Klar, gå vidare →
+          </button>
+        </div>
+      )}
+      {superStep === 'choice' && (
+        <div className={`${styles.onboardingBanner} ${styles.onboardingBannerDone}`}>
+          <span>Bra jobbat med golvet! Vill du lägga till mynt eller en fiende?</span>
+          <div className={styles.superChoiceActions}>
+            <button className={styles.superContinueBtn} onClick={() => superChoose('collectible')}>
+              🪙 Lägg till mynt
+            </button>
+            <button className={styles.superContinueBtn} onClick={() => superChoose('enemy')}>
+              👾 Lägg till en fiende
+            </button>
+          </div>
+        </div>
+      )}
+      {superStep === 'ask-other' && superOther && (
+        <div className={`${styles.onboardingBanner} ${styles.onboardingBannerDone}`}>
+          <span>Bra jobbat! Vill du också lägga till {superOtherLabel}?</span>
+          <div className={styles.superChoiceActions}>
+            <button
+              className={styles.superContinueBtn}
+              onClick={() => superChoose(superOther)}
+            >
+              Ja, lägg till {superOtherLabel}
+            </button>
+            <button
+              className={styles.superContinueBtn}
+              onClick={() => setSuperFlow({ step: 'done', drawing: null, remaining: [] })}
+            >
+              Nej, jag är klar
+            </button>
+          </div>
+        </div>
+      )}
+      {superStep === 'done' && (
+        <div className={`${styles.onboardingBanner} ${styles.onboardingBannerDone}`}>
+          <span>🎉 Nu har du byggt ett helt spel! Testa det med ▶ Spela högst upp.</span>
+        </div>
+      )}
+
     <div className={styles.worldmap}>
       {/* ── Left: Tile Palette ── */}
       <div className={styles.palettePanel}>
@@ -460,13 +595,13 @@ export const WorldMap: React.FC = () => {
         <div className={styles.toolbar}>
           <div className={styles.viewBtns}>
             <button
-              className={`${styles.viewBtn} ${viewMode === 'map' ? styles.active : ''}`}
+              className={`${styles.viewBtn} ${effectiveViewMode === 'map' ? styles.active : ''}`}
               onClick={() => setViewMode('map')}
             >
               🗺️ Karta
             </button>
             <button
-              className={`${styles.viewBtn} ${viewMode === 'room' ? styles.active : ''}`}
+              className={`${styles.viewBtn} ${effectiveViewMode === 'room' ? styles.active : ''}`}
               onClick={() => setViewMode('room')}
               disabled={!activeRoom}
               style={{ opacity: activeRoom ? 1 : 0.4 }}
@@ -475,7 +610,7 @@ export const WorldMap: React.FC = () => {
             </button>
           </div>
 
-          {viewMode === 'room' && activeRoom && (
+          {effectiveViewMode === 'room' && activeRoom && (
             <>
               <span className={styles.roomName}>{activeRoom.name}</span>
               {isStartRoom && <span className={styles.startBadge}>⭐ Startrum</span>}
@@ -531,7 +666,7 @@ export const WorldMap: React.FC = () => {
             </>
           )}
 
-          {viewMode === 'room' && (
+          {effectiveViewMode === 'room' && (
             <div className={styles.toolGroup}>
               <button
                 className={`${styles.toolBtn} ${roomTool === 'paint' && !isEraseMode ? styles.active : ''}`}
@@ -565,7 +700,7 @@ export const WorldMap: React.FC = () => {
         </div>
 
         {/* Map or Room view */}
-        {viewMode === 'map' ? (
+        {effectiveViewMode === 'map' ? (
           <MapView onOpenRoom={handleOpenRoom} />
         ) : (
           <div className={styles.roomView}>
@@ -577,13 +712,20 @@ export const WorldMap: React.FC = () => {
                 <div className={styles.navLeft}>
                   <NavArrowBtn dir="left" roomId={adjacentRooms.left} roomName={adjacentRooms.left ? rooms[adjacentRooms.left]?.name : undefined} onNavigate={handleOpenRoom} />
                 </div>
-                <div className={styles.navCanvas}>
+                <div className={`${styles.navCanvas} ${(ui.onboardingHint === 'place-tile' || superInRoomStep) ? styles.navCanvasHighlight : ''}`}>
+                  {(ui.onboardingHint === 'place-tile' || superInRoomStep) && (
+                    <div className={styles.pointerArrow}>
+                      <span className={styles.pointerArrowIcon}>⬇️</span>
+                      <span>Klicka här!</span>
+                    </div>
+                  )}
                   <RoomCanvas
                     roomId={ui.activeRoomId}
                     selectedTileId={effectiveTileId}
                     tool={effectiveTool}
                     spawnCellIndex={spawnCellIndex}
                     onSpawn={handleSpawnCell}
+                    onOnboardingPlaceTile={() => setViewMode('room')}
                   />
                 </div>
                 <div className={styles.navRight}>
@@ -601,6 +743,7 @@ export const WorldMap: React.FC = () => {
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 };

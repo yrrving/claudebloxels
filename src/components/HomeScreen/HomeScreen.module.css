@@ -33,24 +33,56 @@
   line-height: 1.6;
 }
 
-.newProjectArea {
+.startChoices {
   width: 100%;
-  max-width: 480px;
+  max-width: 1080px;
   margin-bottom: 40px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 20px;
 }
 
-.newProjectCard {
+@media (max-width: 900px) {
+  .startChoices {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .startChoices {
+    grid-template-columns: 1fr;
+  }
+}
+
+.startCard {
   background: var(--bg-card);
   border: 1px solid var(--border-bright);
   border-radius: 16px;
   padding: 24px;
+  display: flex;
+  flex-direction: column;
 }
 
-.newProjectCard h2 {
+.startCard h2 {
   font-size: 1rem;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 14px;
+  margin-bottom: 8px;
+}
+
+.startCardDesc {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 16px;
+  flex: 1;
+}
+
+.startPrimary {
+  width: 100%;
+  justify-content: center;
+  padding: 12px 20px;
+  font-size: 1rem;
 }
 
 .inputRow {
@@ -173,17 +205,26 @@
   color: var(--text-dim);
 }
 
+.renameBtn,
 .deleteBtn {
   opacity: 0;
   transition: opacity 0.15s;
   padding: 6px 10px;
   border-radius: 8px;
-  color: var(--danger);
   font-size: 0.85rem;
 }
 
+.deleteBtn {
+  color: var(--danger);
+}
+
+.savedItem:hover .renameBtn,
 .savedItem:hover .deleteBtn {
   opacity: 1;
+}
+
+.renameBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .deleteBtn:hover {

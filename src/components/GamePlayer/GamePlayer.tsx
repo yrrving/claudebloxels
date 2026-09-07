@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
-import { useStore } from '../../store/useStore';
+import { useStore, goHomeWithSavePrompt } from '../../store/useStore';
 import {
   initGameState,
   updateGame,
@@ -15,7 +15,7 @@ import styles from './GamePlayer.module.css';
 const ROOM_PX = ROOM_SIZE * TILE_SIZE; // 624
 
 export const GamePlayer: React.FC = () => {
-  const { project, setMoveSpeed } = useStore();
+  const { project, ui, setMoveSpeed, setMode, setOnboardingHint, setEditingTile, setSelectedTileArt } = useStore();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameStateRef = useRef<GameState | null>(null);
   const inputRef = useRef<InputState>({
@@ -33,6 +33,49 @@ export const GamePlayer: React.FC = () => {
   const [touchLeft, setTouchLeft] = useState(false);
   const [touchRight, setTouchRight] = useState(false);
   const [touchJump, setTouchJump] = useState(false);
+
+  // "Vill du ändra något?" — after trying the game a little (or immediately
+  // on reaching the goal), invite the besökare to make one small, concrete
+  // change instead of leaving them to find the editor tabs on their own.
+  // This is the mikro-loop from Trainstations egen metodik: prova → se
+  // effekt → vill du testa en variant?
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteDismissed, setInviteDismissed] = useState(false);
+
+  useEffect(() => {
+    setShowInvite(false);
+    setInviteDismissed(false);
+    const t = window.setTimeout(() => setShowInvite(true), 4000);
+    return () => window.clearTimeout(t);
+  }, [project]);
+
+  useEffect(() => {
+    if (gameStatus === 'won') setShowInvite(true);
+  }, [gameStatus]);
+
+  const goChangeColor = useCallback(() => {
+    setOnboardingHint('change-color');
+    setMode('character');
+  }, [setOnboardingHint, setMode]);
+
+  // Chapter 2: point at an existing tile art (ground) instead of a blank
+  // one, same reasoning as the starter game itself — remix something that
+  // already works rather than starting from nothing.
+  const goChangeTile = useCallback(() => {
+    const terrain = project?.tileArts.find((t) => t.blockTypeId === 'terrain');
+    if (terrain) setEditingTile(terrain.id);
+    setOnboardingHint('change-tile');
+    setMode('artboard');
+  }, [project, setEditingTile, setOnboardingHint, setMode]);
+
+  // Chapter 3: pre-select the star tile so the only thing left to do is
+  // click an empty cell — placing a tile, not also hunting for which one.
+  const goPlaceTile = useCallback(() => {
+    const star = project?.tileArts.find((t) => t.blockTypeId === 'collectible');
+    if (star) setSelectedTileArt(star.id);
+    setOnboardingHint('place-tile');
+    setMode('worldmap');
+  }, [project, setSelectedTileArt, setOnboardingHint, setMode]);
 
   const restart = useCallback(() => {
     if (!project) return;
@@ -206,6 +249,48 @@ export const GamePlayer: React.FC = () => {
           onRelease={() => onTouchJump(false)}
         />
       </div>
+
+      {showInvite && !inviteDismissed && (
+        <div className={styles.invite}>
+          <span className={styles.inviteText}>
+            {ui.onboardingStage === 0 &&
+              (gameStatus === 'won' ? 'Bra jobbat! 🎉 Vill du ändra något?' : 'Kul, va? Vill du ändra något?')}
+            {ui.onboardingStage === 1 && 'Snyggt! Vill du ändra en bricka också?'}
+            {ui.onboardingStage === 2 && 'Grymt jobbat! Vill du lägga till en stjärna på banan?'}
+            {ui.onboardingStage === 3 && '🎉 Nu vet du grunderna! Utforska resten själv.'}
+          </span>
+          <div className={styles.inviteActions}>
+            {ui.onboardingStage === 0 && (
+              <button className={`${styles.inviteBtn} ${styles.inviteBtnPulse}`} onClick={goChangeColor}>
+                🎨 Byt figurens färg
+              </button>
+            )}
+            {ui.onboardingStage === 1 && (
+              <button className={`${styles.inviteBtn} ${styles.inviteBtnPulse}`} onClick={goChangeTile}>
+                🧱 Byt en bricka
+              </button>
+            )}
+            {ui.onboardingStage === 2 && (
+              <button className={`${styles.inviteBtn} ${styles.inviteBtnPulse}`} onClick={goPlaceTile}>
+                ⭐ Lägg till en stjärna
+              </button>
+            )}
+            {ui.onboardingStage === 3 && (
+              <button className={`${styles.inviteBtn} ${styles.inviteBtnPulse}`} onClick={goHomeWithSavePrompt}>
+                🏠 Fortsätt bygga fritt
+              </button>
+            )}
+            <button
+              className={styles.inviteClose}
+              onClick={() => setInviteDismissed(true)}
+              aria-label="Stäng"
+              title="Stäng"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className={styles.hint}>
         Tangentbord: ← → hoppa med Mellanslag / W / ↑ &nbsp;|&nbsp; R = starta om

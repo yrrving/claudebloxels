@@ -115,35 +115,49 @@ function getCellsWithBehavior(
   return result;
 }
 
-// Resolve AABB collision against a list of solid grid cells (two-pass)
+// Resolve AABB collision against a list of solid grid cells.
+//
+// Uses minimum-translation-vector resolution: for each tile the entity
+// overlaps after moving, push it out along whichever axis has the SHALLOWER
+// overlap. A fixed horizontal-then-vertical order (the previous approach)
+// always resolves horizontal first regardless of how shallow that overlap
+// is — so an entity that's falling and only barely, freshly touches a
+// tile's top edge (deep-ish horizontally, razor-thin vertically — exactly
+// what happens landing near a tile's corner, e.g. right after a room
+// transition) gets shoved sideways through the tile instead of caught on
+// top. Resolving the shallow axis first is the standard fix for that class
+// of corner-tunneling bug.
 function resolveSolids(
   entity: Entity,
   solidCells: Array<{ x: number; y: number }>
 ) {
-  // Horizontal pass
   entity.x += entity.vx;
-  for (const c of solidCells) {
-    if (!overlaps(entity, { x: c.x, y: c.y, w: TILE_SIZE, h: TILE_SIZE })) continue;
-    const dx = (entity.x + entity.w / 2) - (c.x + TILE_SIZE / 2);
-    entity.x = dx > 0 ? c.x + TILE_SIZE : c.x - entity.w;
-    entity.vx = 0;
-  }
-
-  // Vertical pass
   entity.y += entity.vy;
   entity.onGround = false;
+
   for (const c of solidCells) {
-    if (!overlaps(entity, { x: c.x, y: c.y, w: TILE_SIZE, h: TILE_SIZE })) continue;
-    const dy = (entity.y + entity.h / 2) - (c.y + TILE_SIZE / 2);
-    // dy < 0  →  entity center is ABOVE tile center  →  entity lands on top
-    // dy >= 0 →  entity center is BELOW tile center  →  entity hit a ceiling
-    if (dy < 0) {
-      entity.y = c.y - entity.h;
-      entity.vy = 0;
-      entity.onGround = true;
+    const tile = { x: c.x, y: c.y, w: TILE_SIZE, h: TILE_SIZE };
+    if (!overlaps(entity, tile)) continue;
+
+    const overlapX = Math.min(entity.x + entity.w, tile.x + tile.w) - Math.max(entity.x, tile.x);
+    const overlapY = Math.min(entity.y + entity.h, tile.y + tile.h) - Math.max(entity.y, tile.y);
+
+    if (overlapX < overlapY) {
+      const dx = (entity.x + entity.w / 2) - (tile.x + TILE_SIZE / 2);
+      entity.x = dx > 0 ? tile.x + TILE_SIZE : tile.x - entity.w;
+      entity.vx = 0;
     } else {
-      entity.y = c.y + TILE_SIZE;
-      entity.vy = Math.max(0, entity.vy);
+      const dy = (entity.y + entity.h / 2) - (tile.y + TILE_SIZE / 2);
+      // dy < 0  →  entity center is ABOVE tile center  →  entity lands on top
+      // dy >= 0 →  entity center is BELOW tile center  →  entity hit a ceiling
+      if (dy < 0) {
+        entity.y = tile.y - entity.h;
+        entity.vy = 0;
+        entity.onGround = true;
+      } else {
+        entity.y = tile.y + TILE_SIZE;
+        entity.vy = Math.max(0, entity.vy);
+      }
     }
   }
 }

@@ -121,6 +121,108 @@
   flex-shrink: 0;
 }
 
+.onboardingBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--accent-glow);
+  border-bottom: 1px solid var(--accent);
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.onboardingBannerDone {
+  background: rgba(76, 163, 122, 0.22);
+}
+
+.onboardingClose {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: var(--text-dim);
+  font-size: 0.75rem;
+}
+
+.onboardingClose:hover {
+  background: rgba(255,255,255,0.1);
+  color: var(--text-primary);
+}
+
+/* "Klar, gå vidare" — Super handlett läge's one consistent action button:
+   the besökare presses it whenever THEY feel done, no auto-detection. */
+.superContinueBtn {
+  flex-shrink: 0;
+  padding: 6px 16px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  animation: onboardingPulse 1s ease-in-out infinite;
+}
+
+.superContinueBtn:hover {
+  background: var(--accent-hover);
+}
+
+@keyframes onboardingPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+/* Big, unmissable bouncing arrow + label pointing at exactly what to click. */
+.pointerArrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  width: fit-content;
+  margin: 6px auto;
+  padding: 8px 18px;
+  background: var(--accent);
+  border-radius: 14px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #fff;
+  text-align: center;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+  animation: pointerBounce 0.7s ease-in-out infinite;
+}
+
+.pointerArrowIcon {
+  font-size: 1.6rem;
+  line-height: 1.1;
+}
+
+@keyframes pointerBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(8px); }
+}
+
+.canvasWrapHighlight {
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 8px;
+  animation: highlightGlow 1s ease-in-out infinite;
+}
+
+.paletteGridHighlight {
+  outline: 3px solid var(--accent);
+  outline-offset: 6px;
+  border-radius: 10px;
+  animation: highlightGlow 1s ease-in-out infinite;
+}
+
+@keyframes highlightGlow {
+  0%, 100% { outline-color: var(--accent); }
+  50% { outline-color: transparent; }
+}
+
 .fpsRow {
   padding: 10px 12px;
   display: flex;

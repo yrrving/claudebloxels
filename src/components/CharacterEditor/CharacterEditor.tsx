@@ -51,6 +51,7 @@ function renderFrameToCanvas(
 export const CharacterEditor: React.FC = () => {
   const {
     project,
+    ui,
     initPlayerCharacter,
     clearPlayerCharacter,
     updateCharacterFrame,
@@ -64,6 +65,9 @@ export const CharacterEditor: React.FC = () => {
     setSelectedColor,
     setDrawTool,
     pushUndo,
+    setOnboardingHint,
+    setSuperFlow,
+    setMode,
   } = useStore();
 
   const [selectedAnim, setSelectedAnim] = useState<AnimationName>('idle');
@@ -92,13 +96,18 @@ export const CharacterEditor: React.FC = () => {
     let last = performance.now();
 
     const tick = (now: number) => {
-      if (!running) return;
+      if (!running || frames.length === 0) return;
       const dt = (now - last) / 1000;
       last = now;
       previewTimeRef.current += dt;
       const fDur = 1 / Math.max(1, fps);
       const fi = Math.floor(previewTimeRef.current / fDur) % frames.length;
-      renderFrameToCanvas(canvas, frames[fi].pixels, PREVIEW_SIZE);
+      const frame = frames[fi];
+      // Defensive: React StrictMode's double effect-invocation in dev can
+      // leave a stray, already-superseded tick() still scheduled for one
+      // more animation frame — bail quietly instead of throwing on a
+      // momentarily-stale frames array.
+      if (frame) renderFrameToCanvas(canvas, frame.pixels, PREVIEW_SIZE);
       previewRafRef.current = requestAnimationFrame(tick);
     };
     previewRafRef.current = requestAnimationFrame(tick);
@@ -115,16 +124,26 @@ export const CharacterEditor: React.FC = () => {
       if (currentFrame.pixels[index] === drawColor) return;
       pushUndo();
       updateCharacterFrame(selectedAnim, selectedFrame, index, drawColor);
+      // They've made the change the invite pointed at — now invite them
+      // back to Play mode to actually see it, instead of leaving them to
+      // find the "Spela" tab on their own. (Forgiving: also fires if they
+      // paint before formally "picking" a color, e.g. via eyedropper.)
+      if (ui.onboardingHint === 'change-color' || ui.onboardingHint === 'paint-now') {
+        setOnboardingHint('return-to-game');
+      }
     },
-    [currentFrame, selectedAnim, selectedFrame, updateCharacterFrame, pushUndo]
+    [currentFrame, selectedAnim, selectedFrame, updateCharacterFrame, pushUndo, setOnboardingHint, ui.onboardingHint]
   );
 
   const handleFill = useCallback(
     (index: number, fillColor: string) => {
       pushUndo();
       fillCharacterFrame(selectedAnim, selectedFrame, index, fillColor);
+      if (ui.onboardingHint === 'change-color' || ui.onboardingHint === 'paint-now') {
+        setOnboardingHint('return-to-game');
+      }
     },
-    [selectedAnim, selectedFrame, fillCharacterFrame, pushUndo]
+    [selectedAnim, selectedFrame, fillCharacterFrame, pushUndo, setOnboardingHint, ui.onboardingHint]
   );
 
   const handleEyedropper = useCallback(
@@ -141,18 +160,32 @@ export const CharacterEditor: React.FC = () => {
   if (!project) return null;
 
   if (!character) {
+    const superCharacterStep = ui.superFlow?.step === 'character';
     return (
-      <div className={styles.editor}>
-        <div className={styles.empty}>
-          <div className={styles.emptyIcon}>🧍</div>
-          <p className={styles.emptyTitle}>Ingen egen karaktär</p>
-          <p className={styles.emptyDesc}>
-            Rita din egen spelfigur med animationer.<br />
-            Den ersätter automatiskt standardfiguren när du spelar.
-          </p>
-          <button className={styles.createBtn} onClick={initPlayerCharacter}>
-            ✏️ Skapa karaktär
-          </button>
+      <div className={styles.editorWrapper}>
+        {superCharacterStep && (
+          <div className={styles.onboardingBanner}>
+            <span>Nu ska du rita upp din karaktär!</span>
+          </div>
+        )}
+        <div className={styles.editor}>
+          <div className={styles.empty}>
+            <div className={styles.emptyIcon}>🧍</div>
+            <p className={styles.emptyTitle}>Ingen egen karaktär</p>
+            <p className={styles.emptyDesc}>
+              Rita din egen spelfigur med animationer.<br />
+              Den ersätter automatiskt standardfiguren när du spelar.
+            </p>
+            {superCharacterStep && (
+              <div className={styles.pointerArrow}>
+                <span className={styles.pointerArrowIcon}>⬇️</span>
+                <span>Klicka här!</span>
+              </div>
+            )}
+            <button className={styles.createBtn} onClick={initPlayerCharacter}>
+              ✏️ Skapa karaktär
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -171,6 +204,7 @@ export const CharacterEditor: React.FC = () => {
   const handleColorChange = (c: string) => {
     setColor(c);
     setSelectedColor(c);
+    if (ui.onboardingHint === 'change-color') setOnboardingHint('paint-now');
     if (tool === 'eraser') {
       setTool('pen');
       setDrawTool('pen');
@@ -214,6 +248,65 @@ export const CharacterEditor: React.FC = () => {
 
   return (
     <div className={styles.editorWrapper}>
+      {/* ── Onboarding banner: guided "prova ändra något" flow from the
+          GamePlayer invite. Shown ABOVE the status bar, full-width, so it
+          can't be missed the way the smaller in-panel callout was. ── */}
+      {ui.onboardingHint === 'change-color' && (
+        <div className={styles.onboardingBanner}>
+          <span>Steg 1 av 3 — Välj en färg</span>
+          <button
+            className={styles.onboardingClose}
+            onClick={() => setOnboardingHint(null)}
+            aria-label="Stäng"
+            title="Stäng"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      {ui.onboardingHint === 'paint-now' && (
+        <div className={styles.onboardingBanner}>
+          <span>Steg 2 av 3 — Rita på figuren</span>
+          <button
+            className={styles.onboardingClose}
+            onClick={() => setOnboardingHint(null)}
+            aria-label="Stäng"
+            title="Stäng"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      {ui.onboardingHint === 'return-to-game' && (
+        <div className={`${styles.onboardingBanner} ${styles.onboardingBannerDone}`}>
+          <span>Steg 3 av 3 — Testa din nya figur</span>
+          <button
+            className={styles.onboardingClose}
+            onClick={() => setOnboardingHint(null)}
+            aria-label="Stäng"
+            title="Stäng"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* ── Super handlett läge: rita klart, sen vidare till golvet ── */}
+      {ui.superFlow?.step === 'character' && (
+        <div className={styles.onboardingBanner}>
+          <span>Rita din figur — klicka "Klar" när du är nöjd!</span>
+          <button
+            className={styles.superContinueBtn}
+            onClick={() => {
+              setSuperFlow({ step: 'floor-draw', drawing: null, remaining: ui.superFlow!.remaining });
+              setMode('artboard');
+            }}
+          >
+            ✅ Klar, gå vidare →
+          </button>
+        </div>
+      )}
+
       {/* ── Status banner ── */}
       <div className={styles.statusBar}>
         <span className={styles.statusActive}>✅ Din karaktär är aktiv</span>
@@ -326,7 +419,13 @@ export const CharacterEditor: React.FC = () => {
             </button>
           </div>
         </div>
-        <div className={styles.canvasWrap}>
+        {ui.onboardingHint === 'paint-now' && (
+          <div className={styles.pointerArrow}>
+            <span className={styles.pointerArrowIcon}>⬇️</span>
+            <span>Rita här!</span>
+          </div>
+        )}
+        <div className={`${styles.canvasWrap} ${ui.onboardingHint === 'paint-now' ? styles.canvasWrapHighlight : ''}`}>
           {currentFrame ? (
             <PixelCanvas
               pixels={currentFrame.pixels}
@@ -380,7 +479,13 @@ export const CharacterEditor: React.FC = () => {
         <div className={styles.panelHeader}>
           <span className={styles.panelTitle}>Palett</span>
         </div>
-        <div className={styles.paletteGrid}>
+        {ui.onboardingHint === 'change-color' && (
+          <div className={styles.pointerArrow}>
+            <span className={styles.pointerArrowIcon}>⬇️</span>
+            <span>Välj färg här!</span>
+          </div>
+        )}
+        <div className={`${styles.paletteGrid} ${ui.onboardingHint === 'change-color' ? styles.paletteGridHighlight : ''}`}>
           {ART_EXTRA_COLORS.map((c) => (
             <button
               key={c}

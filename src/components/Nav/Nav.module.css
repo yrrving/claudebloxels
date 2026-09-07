@@ -98,6 +98,53 @@
   color: var(--text-primary);
 }
 
+/* Step 3 of the guided onboarding flow points here — see Nav.tsx. */
+.stepTabHighlight {
+  background: var(--accent) !important;
+  color: #fff !important;
+  animation: stepTabPulse 1s ease-in-out infinite;
+}
+
+@keyframes stepTabPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+/* Points UP at the tab from just below it — the Nav bar sits at the very
+   top of the page with no room above it, so an arrow above the tab would
+   get clipped by the viewport edge. */
+.stepPointerArrow {
+  position: absolute;
+  top: 100%;
+  margin-top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: max-content;
+  padding: 6px 14px;
+  background: var(--accent);
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+  animation: stepPointerBounce 0.7s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.stepPointerArrowIcon {
+  font-size: 1.3rem;
+  line-height: 1.1;
+}
+
+@keyframes stepPointerBounce {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-6px); }
+}
+
 .stepActive {
   background: var(--bg-card);
   color: var(--text-primary);

@@ -158,6 +158,75 @@
   padding: 4px;
 }
 
+.invite {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: rgba(76, 163, 122, 0.12);
+  border: 1px solid rgba(76, 163, 122, 0.4);
+  border-radius: 12px;
+  animation: inviteIn 0.2s ease-out;
+}
+
+@keyframes inviteIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.inviteText {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.inviteActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inviteBtn {
+  padding: 7px 14px;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.inviteBtn:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+.inviteBtnPulse {
+  animation: invitePulse 1s ease-in-out infinite;
+}
+
+@keyframes invitePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+}
+
+.inviteClose {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  transition: all 0.15s;
+}
+
+.inviteClose:hover {
+  background: rgba(255,255,255,0.1);
+  color: var(--text-primary);
+}
+
 /* Show touch controls only on touch devices or narrow screens */
 @media (hover: hover) and (pointer: fine) {
   /* Desktop: hide touch controls */

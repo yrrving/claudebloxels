@@ -144,13 +144,20 @@ interface Store {
   savedProjects: { id: string; name: string; updatedAt: number }[];
   undoStack: { tileArts: TileArt[]; character: CharacterDefinition | null }[];
   redoStack: { tileArts: TileArt[]; character: CharacterDefinition | null }[];
+  // True once the current project has been edited since it was created/
+  // loaded/last saved. Nothing is auto-saved into "Sparade spel" anymore —
+  // a project only lands there when the besökare deliberately saves it (or
+  // is asked to, when leaving with unsaved changes), so the list doesn't
+  // silently fill up with half-finished attempts.
+  hasUnsavedChanges: boolean;
 
   // Project lifecycle
   createProject: (name: string) => void;
   loadProjectById: (id: string) => void;
-  saveCurrentProject: () => void;
+  saveCurrentProject: (name?: string) => void;
+  renameProject: (id: string, name: string) => void;
   deleteProject: (id: string) => void;
-  importProjectFromJSON: (json: string) => void;
+  importProjectFromJSON: (json: string, options?: { skipSave?: boolean }) => void;
 
   // Tile Arts
   createTileArt: (name: string, blockTypeId: BlockTypeBehavior) => void;
@@ -192,6 +199,9 @@ interface Store {
   setSelectedBlockType: (id: BlockTypeBehavior) => void;
   setDrawTool: (tool: DrawTool) => void;
   updatePaletteColor: (index: number, color: string) => void;
+  setOnboardingHint: (hint: UIState['onboardingHint']) => void;
+  setOnboardingStage: (stage: UIState['onboardingStage']) => void;
+  setSuperFlow: (flow: UIState['superFlow']) => void;
 
   // Undo/Redo
   pushUndo: () => void;
@@ -230,6 +240,7 @@ export const useStore = create<Store>((set, get) => ({
   savedProjects: loadSavedList(),
   undoStack: [],
   redoStack: [],
+  hasUnsavedChanges: false,
   ui: {
     mode: 'home',
     selectedBlockTypeId: 'terrain',
@@ -239,17 +250,21 @@ export const useStore = create<Store>((set, get) => ({
     activeRoomId: null,
     selectedTileArtId: null,
     artPalette: getDefaultArtPalette(),
+    onboardingHint: null,
+    onboardingStage: 0,
+    superFlow: null,
   },
 
   // ── Project lifecycle ──
   createProject: (name) => {
+    // Not saved yet — only lands in "Sparade spel" once the besökare
+    // deliberately saves it (see saveCurrentProject / Nav's leave-prompt).
     const project = makeDefaultProject(name);
-    saveToStorage(project);
     set({
       project,
-      savedProjects: loadSavedList(),
       undoStack: [],
       redoStack: [],
+      hasUnsavedChanges: false,
       ui: {
         mode: 'artboard',
         selectedBlockTypeId: 'terrain',
@@ -259,6 +274,9 @@ export const useStore = create<Store>((set, get) => ({
         activeRoomId: project.worldMap.startRoomId,
         selectedTileArtId: null,
         artPalette: getDefaultArtPalette(),
+        onboardingHint: null,
+        onboardingStage: 0,
+        superFlow: null,
       },
     });
   },
@@ -273,6 +291,7 @@ export const useStore = create<Store>((set, get) => ({
         project,
         undoStack: [],
         redoStack: [],
+        hasUnsavedChanges: false,
         ui: {
           mode: 'worldmap',
           selectedBlockTypeId: 'terrain',
@@ -282,6 +301,9 @@ export const useStore = create<Store>((set, get) => ({
           activeRoomId: project.worldMap.startRoomId,
           selectedTileArtId: null,
           artPalette: getDefaultArtPalette(),
+          onboardingHint: null,
+          onboardingStage: 0,
+          superFlow: null,
         },
       });
       localStorage.setItem(CURRENT_KEY, id);
@@ -290,12 +312,42 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
-  saveCurrentProject: () => {
+  saveCurrentProject: (name) => {
     const { project } = get();
     if (!project) return;
-    const updated = { ...project, updatedAt: Date.now() };
+    const updated = { ...project, name: name?.trim() || project.name, updatedAt: Date.now() };
     saveToStorage(updated);
-    set({ project: updated, savedProjects: loadSavedList() });
+    set({ project: updated, savedProjects: loadSavedList(), hasUnsavedChanges: false });
+  },
+
+  renameProject: (id, name) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const { project } = get();
+    if (project?.id === id) {
+      // Renaming the currently open project — update both the live project
+      // and, only if it was already saved before, its stored copy too.
+      const updated = { ...project, name: trimmed };
+      set({ project: updated });
+      const wasSaved = loadSavedList().some((p) => p.id === id);
+      if (wasSaved) {
+        saveToStorage({ ...updated, updatedAt: Date.now() });
+        set({ savedProjects: loadSavedList() });
+      }
+      return;
+    }
+    // Renaming a different saved project from the Hem-list.
+    try {
+      const raw = localStorage.getItem(`project_${id}`);
+      if (!raw) return;
+      const stored: Project = JSON.parse(raw);
+      stored.name = trimmed;
+      stored.updatedAt = Date.now();
+      saveToStorage(stored);
+      set({ savedProjects: loadSavedList() });
+    } catch {
+      // corrupted data
+    }
   },
 
   deleteProject: (id) => {
@@ -304,24 +356,30 @@ export const useStore = create<Store>((set, get) => ({
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
     const { project } = get();
     if (project?.id === id) {
-      set({ project: null, savedProjects: list, ui: { ...get().ui, mode: 'home' } });
+      set({ project: null, savedProjects: list, hasUnsavedChanges: false, ui: { ...get().ui, mode: 'home' } });
     } else {
       set({ savedProjects: list });
     }
   },
 
-  importProjectFromJSON: (json) => {
+  // Not saved yet (see createProject) — the besökare explicitly opening a
+  // .bloxels.json file is the one exception that still saves immediately,
+  // since importing IS the deliberate "this is mine, keep it" action; the
+  // starter-game import used by Handlett läge passes skipSave so trying the
+  // demo doesn't itself clutter "Sparade spel".
+  importProjectFromJSON: (json, options) => {
     try {
       const project: Project = JSON.parse(json);
       project.id = uuid(); // new id to avoid conflict
       project.updatedAt = Date.now();
-      saveToStorage(project);
+      if (!options?.skipSave) saveToStorage(project);
       set({
         project,
         savedProjects: loadSavedList(),
         undoStack: [],
         redoStack: [],
-        ui: { ...get().ui, mode: 'worldmap', activeRoomId: project.worldMap.startRoomId },
+        hasUnsavedChanges: false,
+        ui: { ...get().ui, mode: 'worldmap', activeRoomId: project.worldMap.startRoomId, onboardingHint: null, onboardingStage: 0, superFlow: null },
       });
     } catch {
       alert('Ogiltig projektfil');
@@ -527,6 +585,9 @@ export const useStore = create<Store>((set, get) => ({
     palette[index] = color;
     set({ ui: { ...get().ui, artPalette: palette } });
   },
+  setOnboardingHint: (hint) => set({ ui: { ...get().ui, onboardingHint: hint } }),
+  setOnboardingStage: (stage) => set({ ui: { ...get().ui, onboardingStage: stage } }),
+  setSuperFlow: (flow) => set({ ui: { ...get().ui, superFlow: flow } }),
 
   // ── Character ──
   initPlayerCharacter: () => {
@@ -671,3 +732,39 @@ export const useStore = create<Store>((set, get) => ({
     });
   },
 }));
+
+// Shared by every "go back to Hem" button (Nav's own tab, GamePlayer's
+// end-of-onboarding "Fortsätt bygga fritt") — nothing auto-saves into
+// "Sparade spel" anymore, so leaving with unsaved changes is the one moment
+// to ask, rather than letting work silently vanish or piling up
+// half-finished entries on every attempt.
+export function goHomeWithSavePrompt() {
+  const { project, hasUnsavedChanges, saveCurrentProject, setMode } = useStore.getState();
+  if (project && hasUnsavedChanges) {
+    const wantsSave = confirm('Du har osparade ändringar. Vill du spara ditt spel innan du går till Hem?');
+    if (wantsSave) {
+      const name = window.prompt('Namnge ditt spel:', project.name);
+      if (name === null) return; // Avbryt — stanna kvar, spara inte, gå inte hem
+      saveCurrentProject(name);
+    }
+  }
+  setMode('home');
+}
+
+// Marks hasUnsavedChanges whenever `project` changes in a way that isn't a
+// fresh create/load (different id) and isn't the save action itself (which
+// clears the flag in the very same set() call, so it and this update never
+// disagree). This avoids threading a manual "mark dirty" call through every
+// single edit action (pixel paint, cell placement, rename, fps change, …).
+useStore.subscribe((state, prevState) => {
+  if (
+    state.project &&
+    prevState.project &&
+    state.project !== prevState.project &&
+    state.project.id === prevState.project.id &&
+    state.hasUnsavedChanges === prevState.hasUnsavedChanges &&
+    !state.hasUnsavedChanges
+  ) {
+    useStore.setState({ hasUnsavedChanges: true });
+  }
+});

@@ -29,12 +29,38 @@ export const ArtBoard: React.FC = () => {
     setSelectedBlockType,
     setDrawTool,
     pushUndo,
+    setOnboardingHint,
+    setSelectedTileArt,
+    setSuperFlow,
+    setMode,
   } = useStore();
 
   const colorPickerRef = useRef<HTMLInputElement>(null);
 
   const tileArts = project?.tileArts ?? [];
   const editingTile = tileArts.find((t) => t.id === ui.editingTileId) ?? null;
+
+  // ── Super handlett läge: which block type this step is about, and
+  // whether a tile of that type already exists (→ point at "+", or at
+  // "Klar, gå vidare" once one does). ──────────────────────────────────────
+  const superStep = ui.superFlow?.step;
+  const superTargetType: BlockTypeBehavior | null =
+    superStep === 'floor-draw' ? 'terrain' : superStep === 'draw' ? ui.superFlow!.drawing : null;
+  const superHasTargetTile = superTargetType ? tileArts.some((t) => t.blockTypeId === superTargetType) : false;
+  const superLabel =
+    superStep === 'floor-draw' ? 'golvet'
+    : ui.superFlow?.drawing === 'collectible' ? 'ditt mynt'
+    : 'din fiende';
+
+  const superContinue = () => {
+    if (editingTile) setSelectedTileArt(editingTile.id);
+    if (superStep === 'floor-draw') {
+      setSuperFlow({ step: 'floor-place', drawing: null, remaining: ui.superFlow!.remaining });
+    } else {
+      setSuperFlow({ step: 'place', drawing: ui.superFlow!.drawing, remaining: ui.superFlow!.remaining });
+    }
+    setMode('worldmap');
+  };
 
   // ── Actions ──────────────────────────────────────────────────────────────────
   const handleNewTile = () => {
@@ -48,8 +74,11 @@ export const ArtBoard: React.FC = () => {
       if (editingTile.pixels[index] === color) return;
       pushUndo();
       updatePixel(editingTile.id, index, color);
+      if (ui.onboardingHint === 'change-tile' || ui.onboardingHint === 'paint-tile-now') {
+        setOnboardingHint('return-to-game-2');
+      }
     },
-    [editingTile, updatePixel, pushUndo]
+    [editingTile, updatePixel, pushUndo, ui.onboardingHint, setOnboardingHint]
   );
 
   const handleFill = useCallback(
@@ -57,8 +86,11 @@ export const ArtBoard: React.FC = () => {
       if (!editingTile) return;
       pushUndo();
       fillPixels(editingTile.id, index, color);
+      if (ui.onboardingHint === 'change-tile' || ui.onboardingHint === 'paint-tile-now') {
+        setOnboardingHint('return-to-game-2');
+      }
     },
-    [editingTile, fillPixels, pushUndo]
+    [editingTile, fillPixels, pushUndo, ui.onboardingHint, setOnboardingHint]
   );
 
   const handleEyedropper = useCallback(
@@ -78,10 +110,18 @@ export const ArtBoard: React.FC = () => {
     }
   };
 
+  // Wraps every color-picking interaction (block type swatch, palette
+  // swatch, native color input) so the onboarding arrow can move from
+  // "pick a color" to "now paint" the moment any of them is used.
+  const pickColor = (color: string) => {
+    setSelectedColor(color);
+    if (ui.onboardingHint === 'change-tile') setOnboardingHint('paint-tile-now');
+  };
+
   const handleBlockTypeClick = (id: BlockTypeBehavior) => {
     const bt = BLOCK_TYPES.find((b) => b.id === id)!;
     setSelectedBlockType(id);
-    setSelectedColor(bt.color);
+    pickColor(bt.color);
   };
 
   // ── Keyboard shortcuts ───────────────────────────────────────────────────────
@@ -110,9 +150,77 @@ export const ArtBoard: React.FC = () => {
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
+    <div className={styles.editorWrapper}>
+      {/* Onboarding banner: chapter 2 of the guided "prova ändra något" flow
+          started from the GamePlayer invite (see also CharacterEditor). */}
+      {ui.onboardingHint === 'change-tile' && (
+        <div className={styles.onboardingBanner}>
+          <span>Steg 1 av 2 — Välj en färg</span>
+          <button
+            className={styles.onboardingClose}
+            onClick={() => setOnboardingHint(null)}
+            aria-label="Stäng"
+            title="Stäng"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      {ui.onboardingHint === 'paint-tile-now' && (
+        <div className={styles.onboardingBanner}>
+          <span>Steg 2 av 2 — Rita på brickan</span>
+          <button
+            className={styles.onboardingClose}
+            onClick={() => setOnboardingHint(null)}
+            aria-label="Stäng"
+            title="Stäng"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      {ui.onboardingHint === 'return-to-game-2' && (
+        <div className={`${styles.onboardingBanner} ${styles.onboardingBannerDone}`}>
+          <span>Klart — testa din nya bricka</span>
+          <button
+            className={styles.onboardingClose}
+            onClick={() => setOnboardingHint(null)}
+            aria-label="Stäng"
+            title="Stäng"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* ── Super handlett läge ── */}
+      {superTargetType && !superHasTargetTile && (
+        <div className={styles.onboardingBanner}>
+          <span>
+            {superStep === 'floor-draw' ? 'Nu ska du bygga golvet på banan!'
+              : ui.superFlow?.drawing === 'collectible' ? 'Nu ska du skapa ett mynt!'
+              : 'Nu ska du skapa en fiende!'}
+          </span>
+        </div>
+      )}
+      {superTargetType && superHasTargetTile && (
+        <div className={styles.onboardingBanner}>
+          <span>Rita {superLabel} — klicka "Klar" när du är nöjd!</span>
+          <button className={styles.superContinueBtn} onClick={superContinue}>
+            ✅ Klar, gå vidare →
+          </button>
+        </div>
+      )}
+
     <div className={styles.artboard}>
       {/* ── Left: Tile Library ── */}
       <div className={styles.tilePanel}>
+        {superTargetType && !superHasTargetTile && (
+          <div className={styles.pointerArrow}>
+            <span className={styles.pointerArrowIcon}>⬇️</span>
+            <span>Klicka här!</span>
+          </div>
+        )}
         <div className={styles.panelHeader}>
           <span className={styles.panelTitle}>Brickor</span>
           <button className={styles.addBtn} onClick={handleNewTile} title="Ny bricka">
@@ -237,15 +345,23 @@ export const ArtBoard: React.FC = () => {
 
             {/* Canvas */}
             <div className={styles.canvasArea}>
-              <div className={styles.canvasWrap}>
-                <PixelCanvas
-                  pixels={editingTile.pixels}
-                  tool={ui.drawTool}
-                  selectedColor={ui.selectedColor}
-                  onDraw={handleDraw}
-                  onFill={handleFill}
-                  onEyedropper={handleEyedropper}
-                />
+              <div className={styles.canvasStack}>
+                {ui.onboardingHint === 'paint-tile-now' && (
+                  <div className={styles.pointerArrow}>
+                    <span className={styles.pointerArrowIcon}>⬇️</span>
+                    <span>Rita här!</span>
+                  </div>
+                )}
+                <div className={`${styles.canvasWrap} ${ui.onboardingHint === 'paint-tile-now' ? styles.canvasWrapHighlight : ''}`}>
+                  <PixelCanvas
+                    pixels={editingTile.pixels}
+                    tool={ui.drawTool}
+                    selectedColor={ui.selectedColor}
+                    onDraw={handleDraw}
+                    onFill={handleFill}
+                    onEyedropper={handleEyedropper}
+                  />
+                </div>
               </div>
             </div>
 
@@ -288,7 +404,7 @@ export const ArtBoard: React.FC = () => {
                 type="color"
                 className={styles.colorPickerInput}
                 value={ui.selectedColor || '#ffffff'}
-                onChange={(e) => setSelectedColor(e.target.value)}
+                onChange={(e) => pickColor(e.target.value)}
               />
             </label>
           </div>
@@ -315,19 +431,26 @@ export const ArtBoard: React.FC = () => {
         {/* Extra art colors */}
         <div>
           <div className={styles.colorSectionTitle}>Färger</div>
-          <div className={styles.paletteGrid}>
+          {ui.onboardingHint === 'change-tile' && (
+            <div className={styles.pointerArrow}>
+              <span className={styles.pointerArrowIcon}>⬇️</span>
+              <span>Välj färg här!</span>
+            </div>
+          )}
+          <div className={`${styles.paletteGrid} ${ui.onboardingHint === 'change-tile' ? styles.paletteGridHighlight : ''}`}>
             {[...BLOCK_TYPES.map((b) => b.lightColor), ...ART_EXTRA_COLORS].map((color, i) => (
               <div
                 key={i}
                 className={`${styles.colorSwatch} ${ui.selectedColor === color ? styles.selected : ''}`}
                 style={{ background: color }}
-                onClick={() => setSelectedColor(color)}
+                onClick={() => pickColor(color)}
                 title={color}
               />
             ))}
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 };

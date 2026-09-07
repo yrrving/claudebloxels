@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useStore } from '../../store/useStore';
 import { BLOCK_TYPES } from '../../data/blockTypes';
+import starterProject from '../../data/starterProject.json';
 import styles from './HomeScreen.module.css';
 
 const HOW_IT_WORKS = [
@@ -38,11 +39,34 @@ function formatDate(ts: number): string {
 }
 
 export const HomeScreen: React.FC = () => {
-  const { savedProjects, createProject, loadProjectById, deleteProject, importProjectFromJSON } =
+  const { savedProjects, createProject, loadProjectById, deleteProject, renameProject, importProjectFromJSON, setMode, setSuperFlow } =
     useStore();
   const [name, setName] = useState('Mitt spel');
   const [showHelp, setShowHelp] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // "Spela ett färdigt spel" — lands the besökare in something playable
+  // within one click, instead of an empty canvas. Reuses the existing
+  // import path (fresh id + save), then jumps straight to Play mode so the
+  // very first thing that happens is trying the game, not editing it.
+  // Trainstations egen metodik (Handledarskill 5, "Sänkt tröskel") beskriver
+  // precis detta: en tydlig start, igång inom minuter, prova innan man rör
+  // ritverktygen.
+  const handlePlayStarter = () => {
+    importProjectFromJSON(JSON.stringify(starterProject), { skipSave: true });
+    setMode('gametest');
+  };
+
+  // "Super handlett läge" — never leaves the besökare to guess: draw a
+  // character, then build + place a floor, then draw + place at least one
+  // of mynt/fiende (with the option to also do the other), and only then
+  // are they shown how to test. No starter game, nothing playable until
+  // the very end — the opposite end of the spectrum from Handlett läge.
+  const handleSuperStart = () => {
+    createProject('Mitt spel');
+    setSuperFlow({ step: 'character', drawing: null, remaining: ['collectible', 'enemy'] });
+    setMode('character');
+  };
 
   useEffect(() => {
     if (!showHelp) return;
@@ -119,9 +143,32 @@ export const HomeScreen: React.FC = () => {
         </div>
       )}
 
-      <div className={styles.newProjectArea}>
-        <div className={styles.newProjectCard}>
-          <h2>🆕 Nytt projekt</h2>
+      <div className={styles.startChoices}>
+        <div className={styles.startCard}>
+          <h2>🧭 Super handlett läge</h2>
+          <p className={styles.startCardDesc}>
+            Bygg ditt spel steg för steg — rita din figur, bygg golvet, lägg till mynt eller fiender.
+            Du får hela tiden veta exakt vad du ska göra härnäst.
+          </p>
+          <button className={`${styles.createBtn} ${styles.startPrimary}`} onClick={handleSuperStart}>
+            Börja här ▶️
+          </button>
+        </div>
+
+        <div className={styles.startCard}>
+          <h2>🎮 Handlett läge</h2>
+          <p className={styles.startCardDesc}>
+            Testa ett spel som redan funkar — hoppa, plocka stjärnor och nå målet. Sen kan du ändra
+            precis det du vill: figuren, marken eller fiender.
+          </p>
+          <button className={`${styles.createBtn} ${styles.startPrimary}`} onClick={handlePlayStarter}>
+            Spela nu ▶️
+          </button>
+        </div>
+
+        <div className={styles.startCard}>
+          <h2>🆕 Blankt läge</h2>
+          <p className={styles.startCardDesc}>Rita din egen figur och bygg allt från grunden själv.</p>
           <div className={styles.inputRow}>
             <input
               className={styles.nameInput}
@@ -168,6 +215,17 @@ export const HomeScreen: React.FC = () => {
                   <div className={styles.savedName}>{sp.name}</div>
                   <div className={styles.savedDate}>{formatDate(sp.updatedAt)}</div>
                 </div>
+                <button
+                  className={styles.renameBtn}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const newName = window.prompt('Döp om spelet:', sp.name);
+                    if (newName && newName.trim()) renameProject(sp.id, newName.trim());
+                  }}
+                  title="Döp om"
+                >
+                  ✏️
+                </button>
                 <button
                   className={styles.deleteBtn}
                   onClick={(e) => {
